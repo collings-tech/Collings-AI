@@ -20,8 +20,8 @@
     "productName": "Collings AI",
     "publish": {
       "provider": "github",
-      "owner": "YOUR_GITHUB_USERNAME",
-      "repo": "YOUR_REPO_NAME"
+      "owner": "Walls2002",
+      "repo": "Collings-AI"
     },
     "directories": {
       "output": "dist-installer"
