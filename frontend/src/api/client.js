@@ -39,7 +39,7 @@ client.interceptors.response.use(
         }
       }
     }
-    const msg = err.response?.data?.message || err.message || 'Request failed';
+    const msg = err.response?.data?.error || err.response?.data?.message || err.message || 'Request failed';
     return Promise.reject(new Error(msg));
   }
 );

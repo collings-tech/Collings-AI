@@ -21,20 +21,22 @@ const app = express();
 
 // Global middleware
 app.use(cors());
-app.use(express.json());
 
-// API response logger
+// API logger — must be before express.json() so it catches parse errors too
 app.use((req, res, next) => {
+  console.log(`[API] → ${req.method} ${req.originalUrl}`);
   const originalJson = res.json.bind(res);
   res.json = (body) => {
     console.log(
-      `[API] ${req.method} ${req.originalUrl} → ${res.statusCode}`,
+      `[API] ← ${req.method} ${req.originalUrl} ${res.statusCode}`,
       '\nResponse:', JSON.stringify(body, null, 2)
     );
     return originalJson(body);
   };
   next();
 });
+
+app.use(express.json());
 
 // Routes
 app.use('/v1/auth', authRoutes);
