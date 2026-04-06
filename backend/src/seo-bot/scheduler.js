@@ -12,7 +12,6 @@ const SeoLog = require('../models/SeoLog');
 const SeoSiteConfig = require('../models/SeoSiteConfig');
 const { decrypt } = require('../utils/crypto');
 const { scorePost } = require('./seoScorer');
-const Site = require('../models/Site');
 const { optimizePost, generateImageAltText } = require('./seoOptimizer');
 const { writeSeoMeta, wpRequest, fixImageAltText } = require('./pluginWriter');
 const logger = require('./logger');
