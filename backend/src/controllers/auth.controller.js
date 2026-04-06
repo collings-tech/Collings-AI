@@ -2,10 +2,18 @@
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/User');
+const PendingRegistration = require('../models/PendingRegistration');
 const { JWT_SECRET, JWT_REFRESH_SECRET } = require('../config/env');
+const { sendOtpEmail } = require('../utils/email');
 
 const BCRYPT_ROUNDS = 12;
+const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+
+function generateOtp() {
+  return String(crypto.randomInt(100000, 999999));
+}
 
 function generateAccessToken(user) {
   return jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
@@ -19,30 +27,83 @@ function generateRefreshToken(user) {
   });
 }
 
+// Step 1: Validate details, store in PendingRegistration, send OTP
 async function register(req, res, next) {
   try {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res
-        .status(400)
-        .json({ error: 'name, email, and password are required.' });
+      return res.status(400).json({ error: 'name, email, and password are required.' });
     }
 
     if (password.length < 8) {
-      return res
-        .status(400)
-        .json({ error: 'Password must be at least 8 characters.' });
+      return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     }
 
-    const existing = await User.findOne({ email: email.toLowerCase() });
-    if (existing) {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Block if email already has a fully registered account
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
       return res.status(409).json({ error: 'Email is already registered.' });
     }
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const otp = generateOtp();
+    const otpExpiry = new Date(Date.now() + OTP_EXPIRY_MS);
 
-    const user = await User.create({ name, email, passwordHash });
+    // Upsert: replace any previous pending registration for this email
+    await PendingRegistration.findOneAndUpdate(
+      { email: normalizedEmail },
+      { name: name.trim(), passwordHash, otpCode: otp, otpExpiry },
+      { upsert: true, new: true }
+    );
+
+    await sendOtpEmail(normalizedEmail, otp);
+
+    return res.status(200).json({
+      message: 'OTP sent to your email. Please verify to complete registration.',
+      email: normalizedEmail,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Step 2: Verify OTP → create real User, delete pending record
+async function verifyOtp(req, res, next) {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'email and otp are required.' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const pending = await PendingRegistration.findOne({ email: normalizedEmail });
+    if (!pending) {
+      return res.status(404).json({ error: 'No pending registration for this email. Please register again.' });
+    }
+
+    if (new Date() > pending.otpExpiry) {
+      await PendingRegistration.deleteOne({ email: normalizedEmail });
+      return res.status(400).json({ error: 'OTP has expired. Please register again.' });
+    }
+
+    if (pending.otpCode !== otp) {
+      return res.status(400).json({ error: 'Invalid OTP code.' });
+    }
+
+    // OTP is valid — create the real user account
+    const user = await User.create({
+      name: pending.name,
+      email: pending.email,
+      passwordHash: pending.passwordHash,
+    });
+
+    // Remove the pending record
+    await PendingRegistration.deleteOne({ email: normalizedEmail });
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
@@ -52,6 +113,35 @@ async function register(req, res, next) {
       refreshToken,
       user: { id: user._id, name: user.name, email: user.email },
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Resend a fresh OTP for an existing pending registration
+async function resendOtp(req, res, next) {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'email is required.' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const pending = await PendingRegistration.findOne({ email: normalizedEmail });
+    if (!pending) {
+      return res.status(404).json({ error: 'No pending registration for this email. Please register again.' });
+    }
+
+    const otp = generateOtp();
+    pending.otpCode = otp;
+    pending.otpExpiry = new Date(Date.now() + OTP_EXPIRY_MS);
+    await pending.save();
+
+    await sendOtpEmail(normalizedEmail, otp);
+
+    return res.status(200).json({ message: 'A new OTP has been sent to your email.' });
   } catch (err) {
     next(err);
   }
@@ -171,4 +261,4 @@ async function updatePassword(req, res, next) {
   }
 }
 
-module.exports = { register, login, refresh, logout, me, updateProfile, updatePassword };
+module.exports = { register, verifyOtp, resendOtp, login, refresh, logout, me, updateProfile, updatePassword };
