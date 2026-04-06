@@ -44,12 +44,23 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData) {
     updateData.excerpt = metaDescription;
   }
 
-  if (rewrittenContent) {
-    updateData.content = rewrittenContent;
-    updateData.status = 'draft';
-  } else if (internalLinks && internalLinks.length > 0) {
+  if (rewrittenContent || (internalLinks && internalLinks.length > 0)) {
+    // Fetch current post to preserve its published/draft status and get raw content
+    let currentPost;
     try {
-      const currentPost = await wpRequest({ ...creds, method: 'GET', endpoint: `${endpoint}?context=edit` });
+      currentPost = await wpRequest({ ...creds, method: 'GET', endpoint: `${endpoint}?context=edit` });
+    } catch (err) {
+      logger.warn('pluginWriter: could not fetch post', { postId, err: err.message });
+    }
+
+    // Preserve the post's existing status — if it was published, keep it published
+    const originalStatus = currentPost?.status || 'draft';
+    const preservedStatus = originalStatus === 'publish' ? 'publish' : 'draft';
+
+    if (rewrittenContent) {
+      updateData.content = rewrittenContent;
+      updateData.status = preservedStatus;
+    } else if (currentPost) {
       const currentContent = typeof currentPost.content === 'object'
         ? currentPost.content.raw || currentPost.content.rendered || ''
         : String(currentPost.content || '');
@@ -58,11 +69,9 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData) {
         const relatedSection = buildRelatedPostsSection(internalLinks);
         if (relatedSection) {
           updateData.content = currentContent + relatedSection;
-          updateData.status = 'draft';
+          updateData.status = preservedStatus;
         }
       }
-    } catch (err) {
-      logger.warn('pluginWriter: could not fetch post for internal links', { postId, err: err.message });
     }
   }
 
