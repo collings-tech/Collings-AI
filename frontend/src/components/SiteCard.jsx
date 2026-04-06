@@ -27,18 +27,12 @@ function getDomainLabel(url) {
   try { return new URL(url).hostname; } catch { return url; }
 }
 
-function minsUntilNext(intervalMins) {
+function minsUntilNextScan() {
   const now = new Date();
   const currentMin = now.getMinutes();
   const currentSec = now.getSeconds();
-  const nextBoundary = Math.ceil((currentMin + currentSec / 60) / intervalMins) * intervalMins;
+  const nextBoundary = Math.ceil((currentMin + currentSec / 60) / 5) * 5;
   return Math.max(0, Math.round(nextBoundary - currentMin - currentSec / 60));
-}
-
-function getNextRunLabel() {
-  const mins = minsUntilNext(5);
-  if (mins <= 1) return 'in < 1 min';
-  return `in ${mins} min`;
 }
 
 function scoreColor(score) {
@@ -108,13 +102,98 @@ function TrendArrow({ trend }) {
   return <span className="text-red-400 text-xs">↓ {diff.toFixed(1)}</span>;
 }
 
-export default function SiteCard({ site, seoStats, onSelect, onDelete }) {
-  const [nextRun, setNextRun] = useState(getNextRunLabel());
+function JobStatusBar({ pendingJobs, failedJobs }) {
+  const [scanIn, setScanIn] = useState(minsUntilNextScan());
 
   useEffect(() => {
-    const id = setInterval(() => setNextRun(getNextRunLabel()), 30000);
+    const id = setInterval(() => setScanIn(minsUntilNextScan()), 30000);
     return () => clearInterval(id);
   }, []);
+
+  if (pendingJobs > 0) {
+    return (
+      <div className="bg-brand-950/50 border border-brand-700/30 rounded-xl px-3 py-2 flex items-center gap-2">
+        <svg className="w-3.5 h-3.5 text-brand-400 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        </svg>
+        <span className="text-gray-400 text-xs">Optimizing</span>
+        <span className="ml-auto text-brand-300 text-xs font-semibold">{pendingJobs} job{pendingJobs !== 1 ? 's' : ''} queued</span>
+      </div>
+    );
+  }
+
+  if (failedJobs > 0) {
+    return (
+      <div className="bg-red-950/40 border border-red-700/30 rounded-xl px-3 py-2 flex items-center gap-2">
+        <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <span className="text-red-400 text-xs">{failedJobs} job{failedJobs !== 1 ? 's' : ''} failed</span>
+        <span className="ml-auto text-gray-500 text-xs">WordPress access issue</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-brand-950/50 border border-brand-700/20 rounded-xl px-3 py-2 flex items-center gap-2">
+      <svg className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <span className="text-gray-400 text-xs">Next scan</span>
+      <span className="ml-auto text-brand-300 text-xs font-semibold">{scanIn <= 1 ? 'in < 1 min' : `in ${scanIn} min`}</span>
+    </div>
+  );
+}
+
+function AttentionDropdown({ posts, siteId, onClose }) {
+  const [triggering, setTriggering] = useState({});
+  const [triggered, setTriggered] = useState({});
+
+  const handleOptimize = async (e, post) => {
+    e.stopPropagation();
+    setTriggering((p) => ({ ...p, [post.postId]: true }));
+    try {
+      const client = (await import('../api/client')).default;
+      await client.post(`/seo/jobs/${siteId}`, { postId: post.postId, postType: 'post' });
+      setTriggered((p) => ({ ...p, [post.postId]: true }));
+    } catch { /* silent */ }
+    finally { setTriggering((p) => ({ ...p, [post.postId]: false })); }
+  };
+
+  return (
+    <div className="mt-2 bg-gray-900 border border-amber-700/30 rounded-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="px-3 py-2 border-b border-gray-700/60 flex items-center justify-between">
+        <span className="text-amber-400 text-xs font-semibold">Posts needing attention</span>
+        <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="text-gray-600 hover:text-gray-400 text-xs">✕</button>
+      </div>
+      {posts.map((p) => (
+        <div key={p.postId} className="px-3 py-2.5 border-b border-gray-700/40 last:border-0 flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-gray-200 text-xs truncate">{p.postTitle || `Post #${p.postId}`}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className={`text-xs font-bold ${p.currentScore < 40 ? 'text-red-400' : 'text-amber-400'}`}>{p.currentScore}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${p.status === 'critical' ? 'bg-red-900/40 text-red-300' : 'bg-amber-900/30 text-amber-300'}`}>{p.status}</span>
+            </div>
+          </div>
+          {triggered[p.postId] ? (
+            <span className="text-emerald-400 text-xs font-medium flex-shrink-0">Queued!</span>
+          ) : (
+            <button
+              onClick={(e) => handleOptimize(e, p)}
+              disabled={triggering[p.postId]}
+              className="text-xs px-2.5 py-1 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg transition-colors font-medium flex-shrink-0"
+            >
+              {triggering[p.postId] ? '…' : 'Fix'}
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId }) {
 
   const handleDelete = (e) => {
     e.stopPropagation();
@@ -123,7 +202,8 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete }) {
     }
   };
 
-  const { avgScore, postsOptimized, attentionCount, lastBotRun, trend } = seoStats || {};
+  const [showAttention, setShowAttention] = useState(false);
+  const { avgScore, postsOptimized, attentionCount, lastBotRun, pendingJobs, failedJobs, trend, attentionPosts } = seoStats || {};
   const hasSeoData = seoStats !== null && seoStats !== undefined;
   const colors = scoreColor(avgScore ?? null);
 
@@ -185,24 +265,29 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete }) {
               <div className="text-white font-bold text-base leading-none mb-1">{postsOptimized ?? 0}</div>
               <div className="text-gray-500 text-xs leading-tight">Optimized</div>
             </div>
-            <div className={`rounded-xl px-2 py-2 text-center ${attentionCount > 0 ? 'bg-amber-900/30' : 'bg-gray-700/40'}`}>
+            <button
+              onClick={(e) => { e.stopPropagation(); if (attentionCount > 0) setShowAttention((v) => !v); }}
+              className={`rounded-xl px-2 py-2 text-center transition-all ${attentionCount > 0 ? 'bg-amber-900/30 hover:bg-amber-900/50 cursor-pointer' : 'bg-gray-700/40 cursor-default'}`}
+            >
               <div className={`font-bold text-base leading-none mb-1 ${attentionCount > 0 ? 'text-amber-400' : 'text-white'}`}>{attentionCount ?? 0}</div>
-              <div className={`text-xs leading-tight ${attentionCount > 0 ? 'text-amber-600' : 'text-gray-500'}`}>Attention</div>
-            </div>
+              <div className={`text-xs leading-tight ${attentionCount > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
+                Attention {attentionCount > 0 && <span>{showAttention ? '▲' : '▼'}</span>}
+              </div>
+            </button>
             <div className="bg-gray-700/40 rounded-xl px-2 py-2 text-center">
               <div className="text-gray-300 font-bold text-xs leading-none mb-1 truncate">{formatTimeAgo(lastBotRun) || '—'}</div>
               <div className="text-gray-500 text-xs leading-tight">Last ran</div>
             </div>
           </div>
 
-          <div className="px-5 pb-3">
-            <div className="bg-brand-950/50 border border-brand-700/20 rounded-xl px-3 py-2 flex items-center gap-2">
-              <svg className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-gray-400 text-xs">Next SEO run</span>
-              <span className="ml-auto text-brand-300 text-xs font-semibold">{nextRun}</span>
+          {showAttention && attentionPosts && attentionPosts.length > 0 && (
+            <div className="px-5 pb-3">
+              <AttentionDropdown posts={attentionPosts} siteId={siteId} onClose={() => setShowAttention(false)} />
             </div>
+          )}
+
+          <div className="px-5 pb-3">
+            <JobStatusBar pendingJobs={pendingJobs ?? 0} failedJobs={failedJobs ?? 0} />
           </div>
 
           <div className="px-5 pb-3 flex items-center gap-1.5">

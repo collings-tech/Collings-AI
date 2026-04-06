@@ -19,7 +19,7 @@ const siteSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      unique: true,
+      index: true,
     },
     wpUsername: {
       type: String,
@@ -36,5 +36,8 @@ const siteSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// One record per user per WordPress URL — multiple users CAN share the same siteUrl
+siteSchema.index({ userId: 1, siteUrl: 1 }, { unique: true });
 
 module.exports = mongoose.model('Site', siteSchema);

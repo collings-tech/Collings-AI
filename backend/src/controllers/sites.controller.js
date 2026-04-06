@@ -32,17 +32,11 @@ async function add(req, res, next) {
       });
     }
 
-    // Check if this site URL is already registered by another user
-    const existing = await Site.findOne({ siteUrl });
-    if (existing) {
-      const isOwn = String(existing.userId) === String(req.user.id);
-      if (isOwn) {
-        return res.status(409).json({
-          error: 'You have already added this site to your account.',
-        });
-      }
+    // Prevent the same user from adding the same URL twice
+    const ownExisting = await Site.findOne({ siteUrl, userId: req.user.id });
+    if (ownExisting) {
       return res.status(409).json({
-        error: 'This site is already being managed by another user. Each WordPress site can only be connected to one Collings AI account.',
+        error: 'You have already added this site to your account.',
       });
     }
 
@@ -56,11 +50,6 @@ async function add(req, res, next) {
 
     return res.status(201).json(serializeSite(site));
   } catch (err) {
-    if (err.code === 11000) {
-      return res.status(409).json({
-        error: 'This site is already being managed by another user. Each WordPress site can only be connected to one Collings AI account.',
-      });
-    }
     next(err);
   }
 }

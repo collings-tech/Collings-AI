@@ -18,7 +18,8 @@ const MAX_POSTS_PER_TYPE = 200;
 async function runNightlySweep() {
   logger.info('Nightly SEO sweep started');
 
-  const sites = await Site.find({});
+  const allSites = await Site.find({});
+  const sites = deduplicateBySiteUrl(allSites);
 
   for (const site of sites) {
     try {
@@ -29,6 +30,17 @@ async function runNightlySweep() {
   }
 
   logger.info('Nightly SEO sweep complete');
+}
+
+// Only process one site record per unique WordPress URL.
+// Other users sharing the same URL get their logs mirrored by the scheduler.
+function deduplicateBySiteUrl(sites) {
+  const seen = new Set();
+  return sites.filter((s) => {
+    if (seen.has(s.siteUrl)) return false;
+    seen.add(s.siteUrl);
+    return true;
+  });
 }
 
 async function sweepSite(site) {
@@ -57,6 +69,9 @@ async function sweepSite(site) {
 
   logger.info('Nightly sweep: fetched content', { siteId: site._id, posts: posts.length, pages: pages.length });
 
+  // All site IDs for this WordPress URL (multiple users may share it)
+  const coSiteIds = (await Site.find({ siteUrl: site.siteUrl }, '_id')).map((s) => s._id);
+
   let queued = 0;
   for (const post of [...posts, ...pages]) {
     const { score } = scorePost(post, seoPlugin);
@@ -67,7 +82,8 @@ async function sweepSite(site) {
     const postType = post.type === 'page' ? 'page' : 'post';
 
     try {
-      const existing = await SeoJob.findOne({ siteId: site._id, postId: post.id, status: 'pending' });
+      // Check across ALL site records sharing this URL to avoid duplicates
+      const existing = await SeoJob.findOne({ siteId: { $in: coSiteIds }, postId: post.id, status: 'pending' });
       if (existing) {
         if (existing.priority > priority) {
           await SeoJob.findByIdAndUpdate(existing._id, { $set: { priority } });
@@ -106,4 +122,145 @@ async function fetchAllContent(creds, type) {
   return results;
 }
 
-module.exports = { runNightlySweep, fetchAllContent };
+// ---------------------------------------------------------------------------
+// 5-minute quick sweep
+// ---------------------------------------------------------------------------
+
+let isSweeping = false;
+
+async function runQuickSweep() {
+  if (isSweeping) {
+    logger.info('Quick sweep: already in progress, skipping');
+    return;
+  }
+  isSweeping = true;
+  logger.info('Quick sweep: started');
+
+  try {
+    const allSites = await Site.find({});
+    const sites = deduplicateBySiteUrl(allSites);
+    for (const site of sites) {
+      try {
+        await quickSweepSite(site);
+      } catch (err) {
+        logger.error('Quick sweep: error on site', { siteId: site._id, err: err.message });
+      }
+    }
+  } finally {
+    isSweeping = false;
+    logger.info('Quick sweep: complete');
+  }
+}
+
+async function quickSweepSite(site) {
+  let config = await SeoSiteConfig.findOne({ siteId: site._id });
+  if (!config) config = { enabled: true, seoPlugin: 'none', scoreThresholdRewrite: 40 };
+  if (!config.enabled) return;
+
+  let wpAppPassword;
+  try {
+    wpAppPassword = decrypt(site.wpAppPassword);
+  } catch (err) {
+    logger.error('Quick sweep: decrypt failed', { siteId: site._id, err: err.message });
+    return;
+  }
+
+  const creds = { siteUrl: site.siteUrl, wpUsername: site.wpUsername, wpAppPassword };
+  const seoPlugin = (config.seoPlugin) || 'none';
+
+  // Scan posts and pages
+  const [posts, pages] = await Promise.all([
+    fetchAllContent(creds, 'posts').catch(() => []),
+    fetchAllContent(creds, 'pages').catch(() => []),
+  ]);
+
+  // All site IDs for this WordPress URL (multiple users may share it)
+  const coSiteIds = (await Site.find({ siteUrl: site.siteUrl }, '_id')).map((s) => s._id);
+
+  let contentQueued = 0;
+  for (const item of [...posts, ...pages]) {
+    const { score } = scorePost(item, seoPlugin);
+    if (score >= 80) continue;
+
+    const postType = item.type === 'page' ? 'page' : 'post';
+
+    const existing = await SeoJob.findOne({
+      siteId: { $in: coSiteIds }, postId: item.id,
+      status: { $in: ['pending', 'processing'] },
+    });
+
+    if (existing) {
+      if (existing.priority > 1) {
+        await SeoJob.findByIdAndUpdate(existing._id, { $set: { priority: 1 } });
+      }
+    } else {
+      await SeoJob.create({
+        siteId: site._id, postId: item.id, postType,
+        priority: 1, triggeredBy: '5min_sweep', scheduledAt: new Date(),
+      });
+      contentQueued++;
+    }
+  }
+
+  // Scan media for missing alt text
+  let imageQueued = 0;
+  try {
+    const media = await fetchAllMedia(creds);
+    for (const item of media) {
+      if (item.alt_text && item.alt_text.trim() !== '') continue;
+
+      const existing = await SeoJob.findOne({
+        siteId: { $in: coSiteIds }, postId: item.id,
+        postType: 'image', status: { $in: ['pending', 'processing'] },
+      });
+
+      if (!existing) {
+        await SeoJob.create({
+          siteId: site._id, postId: item.id, postType: 'image',
+          priority: 1, triggeredBy: 'image_check', scheduledAt: new Date(),
+        });
+        imageQueued++;
+      }
+    }
+  } catch (err) {
+    logger.warn('Quick sweep: media check failed', { siteId: site._id, err: err.message });
+  }
+
+  // Record sweep time
+  await SeoSiteConfig.findOneAndUpdate(
+    { siteId: site._id },
+    { $set: { lastSweptAt: new Date() } },
+    { upsert: true }
+  );
+
+  if (contentQueued > 0 || imageQueued > 0) {
+    logger.info('Quick sweep: jobs queued', {
+      siteId: site._id, label: site.label, contentQueued, imageQueued,
+    });
+  }
+}
+
+async function fetchAllMedia(creds) {
+  const results = [];
+  let page = 1;
+  const MAX_MEDIA = 500;
+  while (results.length < MAX_MEDIA) {
+    let batch;
+    try {
+      batch = await wpRequest({
+        ...creds, method: 'GET', endpoint: '/media',
+        data: { per_page: 100, page, media_type: 'image', _fields: 'id,alt_text,title,caption,source_url,media_type' },
+      });
+    } catch (err) {
+      logger.warn('fetchAllMedia: batch failed', { page, err: err.message });
+      break;
+    }
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    results.push(...batch);
+    if (batch.length < 100) break;
+    page++;
+  }
+  return results;
+}
+
+module.exports = { runNightlySweep, runQuickSweep, fetchAllContent };

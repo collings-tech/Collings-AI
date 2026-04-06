@@ -251,13 +251,15 @@ exports.getDashboardOverview = async (req, res, next) => {
 
     const overview = await Promise.all(
       userSites.map(async (site) => {
-        const [avgResult, postsOptimized, lastJob] = await Promise.all([
+        const [avgResult, postsOptimized, lastJob, pendingJobs, failedJobs] = await Promise.all([
           SeoLog.aggregate([
             { $match: { siteId: site._id, createdAt: { $gte: new Date(Date.now() - 30 * 86400000) } } },
             { $group: { _id: null, avg: { $avg: '$scoreAfter' } } },
           ]),
           SeoLog.countDocuments({ siteId: site._id, createdAt: { $gte: startOfMonth } }),
           SeoLog.findOne({ siteId: site._id }).sort({ createdAt: -1 }),
+          SeoJob.countDocuments({ siteId: site._id, status: { $in: ['pending', 'processing'] } }),
+          SeoJob.countDocuments({ siteId: site._id, status: 'failed', completedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
         ]);
 
         const attentionCount = await SeoLog.aggregate([
@@ -276,6 +278,8 @@ exports.getDashboardOverview = async (req, res, next) => {
           postsOptimized,
           attentionCount,
           lastBotRun: lastJob?.createdAt || null,
+          pendingJobs,
+          failedJobs,
         };
       })
     );

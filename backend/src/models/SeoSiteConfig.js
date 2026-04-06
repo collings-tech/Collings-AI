@@ -20,6 +20,7 @@ const seoSiteConfigSchema = new mongoose.Schema(
     scoreThresholdRewrite: { type: Number, default: 40 },
     sweepSchedule: { type: String, default: '0 2 * * *' },
     maxJobsPerCycle: { type: Number, default: 10 },
+    lastSweptAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

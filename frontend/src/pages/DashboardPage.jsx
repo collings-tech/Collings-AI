@@ -62,24 +62,34 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
       const overviewRes = await client.get('/seo/dashboard/overview');
       const overview = overviewRes.data.overview || [];
 
-      const trendResults = await Promise.allSettled(
-        loadedSites.map((site) =>
-          client.get(`/seo/dashboard/${site._id || site.id}/score-trend`, { params: { days: 7 } })
-        )
-      );
+      const [trendResults, attentionResults] = await Promise.all([
+        Promise.allSettled(
+          loadedSites.map((site) =>
+            client.get(`/seo/dashboard/${site._id || site.id}/score-trend`, { params: { days: 7 } })
+          )
+        ),
+        Promise.allSettled(
+          loadedSites.map((site) =>
+            client.get(`/seo/dashboard/${site._id || site.id}/attention`)
+          )
+        ),
+      ]);
 
       const map = {};
       loadedSites.forEach((site, idx) => {
         const siteId = String(site._id || site.id);
         const ovItem = overview.find((o) => String(o.siteId) === siteId) || {};
-        const trendRes = trendResults[idx];
-        const trend = trendRes.status === 'fulfilled' ? trendRes.value.data.trend || [] : [];
+        const trend = trendResults[idx].status === 'fulfilled' ? trendResults[idx].value.data.trend || [] : [];
+        const attentionPosts = attentionResults[idx].status === 'fulfilled' ? attentionResults[idx].value.data.posts || [] : [];
         map[siteId] = {
           avgScore: ovItem.avgScore ?? null,
           postsOptimized: ovItem.postsOptimized ?? 0,
           attentionCount: ovItem.attentionCount ?? 0,
           lastBotRun: ovItem.lastBotRun || null,
+          pendingJobs: ovItem.pendingJobs ?? 0,
+          failedJobs: ovItem.failedJobs ?? 0,
           trend,
+          attentionPosts,
         };
       });
       setSeoData(map);
@@ -256,6 +266,7 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
                       seoStats={seoData[siteId] || null}
                       onSelect={handleSelectSite}
                       onDelete={handleDeleteSite}
+                      siteId={siteId}
                     />
                   );
                 })}
@@ -293,7 +304,7 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
 }
 
 // ---------------------------------------------------------------------------
-// How It Works Tab
+// How It Works Tab — helpers
 // ---------------------------------------------------------------------------
 
 function Section({ title, children }) {
@@ -319,10 +330,120 @@ function InfoCard({ number, title, children }) {
   );
 }
 
+function CollingAIFlowAnim() {
+  const [active, setActive] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setActive(a => (a + 1) % 4), 2400);
+    return () => clearInterval(id);
+  }, []);
+  const STEPS = [
+    { color: '#6366f1', label: 'Your Message', sub: 'Plain English', desc: 'Type any instruction — write a post, edit a page, update a meta description.', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> },
+    { color: '#a855f7', label: 'Claude AI', sub: 'Thinks & plans', desc: 'Claude reads your message, reasons through the best approach, and decides which WordPress REST API calls to make.', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg> },
+    { color: '#3b82f6', label: 'WordPress API', sub: 'Action executed', desc: 'The WordPress REST API receives the call and creates, updates, or retrieves your content instantly.', icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg> },
+    { color: '#22c55e', label: 'Draft Saved', sub: 'Safe & ready', desc: "Content lands as a draft in WordPress. Review it in your dashboard and publish whenever you're ready.", icon: <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
+  ];
+  return (
+    <div className="rounded-2xl border border-gray-700/50 overflow-hidden mb-4" style={{ background: 'rgba(17,24,39,0.6)' }}>
+      <style>{`@keyframes packetMove{from{left:0%}to{left:100%}}@keyframes nodePulse{0%,100%{box-shadow:0 0 0 0 var(--nc)}50%{box-shadow:0 0 18px 4px var(--nc)}}`}</style>
+      <div className="flex items-start p-5 gap-1">
+        {STEPS.map((s, i) => (
+          <React.Fragment key={i}>
+            <div className="flex flex-col items-center gap-2 flex-1" style={{ opacity: active === i ? 1 : 0.32, transition: 'opacity 0.5s' }}>
+              <div style={{ width:52,height:52,borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',background:active===i?`${s.color}20`:'#1f2937',border:`1.5px solid ${active===i?s.color:'#374151'}`,color:active===i?s.color:'#4b5563',transform:active===i?'scale(1.12)':'scale(1)',transition:'all 0.45s ease','--nc':`${s.color}55`,animation:active===i?'nodePulse 1.6s ease-in-out infinite':'none' }}>{s.icon}</div>
+              <p style={{ fontSize:11,fontWeight:700,color:active===i?'#f9fafb':'#6b7280',textAlign:'center',transition:'color 0.4s' }}>{s.label}</p>
+              <p style={{ fontSize:10,color:'#4b5563',textAlign:'center' }}>{s.sub}</p>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div style={{ display:'flex',alignItems:'center',marginTop:16,flexShrink:0,width:28,position:'relative' }}>
+                <div style={{ flex:1,height:2,background:'#1f2937',borderRadius:4,overflow:'hidden',position:'relative' }}>
+                  <div style={{ position:'absolute',inset:0,borderRadius:4,background:s.color,transform:`scaleX(${active>i?1:0})`,transformOrigin:'left',transition:'transform 0.5s ease' }} />
+                  {active===i && <div style={{ position:'absolute',top:'50%',transform:'translateY(-50%)',width:6,height:6,borderRadius:'50%',background:s.color,animation:'packetMove 2.4s linear forwards' }} />}
+                </div>
+                <svg width="6" height="10" viewBox="0 0 6 10" style={{ flexShrink:0,marginLeft:1 }}><path d="M0 0 L6 5 L0 10 Z" fill={active>i?s.color:'#374151'} style={{ transition:'fill 0.5s' }} /></svg>
+              </div>
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+      <div style={{ padding:'8px 20px 12px',borderTop:'1px solid #1f293766',background:'#0f172a66' }}>
+        <p style={{ fontSize:11.5,color:'#9ca3af',textAlign:'center',minHeight:16 }}>{STEPS[active].desc}</p>
+      </div>
+    </div>
+  );
+}
+
+function SEOBotFlowAnim() {
+  const [active, setActive] = React.useState(0);
+  const [displayScore, setDisplayScore] = React.useState(28);
+  const BEFORE_SCORE = 28, AFTER_SCORE = 86;
+  React.useEffect(() => {
+    const id = setInterval(() => setActive(a => (a + 1) % 5), 2200);
+    return () => clearInterval(id);
+  }, []);
+  React.useEffect(() => {
+    if (active === 4) {
+      let v = BEFORE_SCORE;
+      const t = setInterval(() => { v += 4; if (v >= AFTER_SCORE) { setDisplayScore(AFTER_SCORE); clearInterval(t); } else setDisplayScore(v); }, 40);
+      return () => clearInterval(t);
+    }
+    if (active === 0) setDisplayScore(BEFORE_SCORE);
+  }, [active]);
+  const STEPS = [
+    { color:'#6366f1', label:'Nightly Sweep', sub:'2:00 AM daily', desc:'The SEO Bot scans every published post and page across all your connected sites.', icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg> },
+    { color:'#ef4444', label:'Score: 28', sub:'Critical', desc:"A post is found with a critical SEO score of 28. It's missing a focus keyword, meta title, and internal links.", icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg> },
+    { color:'#f59e0b', label:'Job Queued', sub:'Priority 2 — medium', desc:'The post is added to the SEO job queue at medium priority. It will be processed in the next 30-minute cycle.', icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
+    { color:'#a855f7', label:'Claude Optimizes', sub:'AI writes metadata', desc:'Claude generates a focus keyword, meta title (50–60 chars), meta description (140–160 chars), and suggests internal links.', icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg> },
+    { color:'#22c55e', label:'Score: 86 ✓', sub:'Good — complete', desc:'The post is re-scored after optimisation. Score jumped from 28 → 86. The job is marked complete.', icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
+  ];
+  const r = 18, circ = 2 * Math.PI * r;
+  const ringColor = displayScore >= 80 ? '#22c55e' : displayScore >= 60 ? '#f59e0b' : displayScore >= 40 ? '#f97316' : '#ef4444';
+  const dash = (Math.min(displayScore, 100) / 100) * circ;
+  return (
+    <div className="rounded-2xl border border-gray-700/50 overflow-hidden mb-4" style={{ background:'rgba(17,24,39,0.6)' }}>
+      <style>{`@keyframes seoPacket{from{left:0%}to{left:100%}}@keyframes seoNodePulse{0%,100%{box-shadow:0 0 0 0 var(--sc)}50%{box-shadow:0 0 18px 4px var(--sc)}}`}</style>
+      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+        <p style={{ fontSize:11,color:'#6b7280',fontWeight:600,letterSpacing:'0.05em',textTransform:'uppercase' }}>Live SEO Score</p>
+        <div style={{ display:'flex',alignItems:'center',gap:8 }}>
+          <svg width="44" height="44" viewBox="0 0 44 44" style={{ transform:'rotate(-90deg)' }}>
+            <circle cx="22" cy="22" r={r} fill="none" stroke="#1f2937" strokeWidth="4" />
+            <circle cx="22" cy="22" r={r} fill="none" stroke={ringColor} strokeWidth="4" strokeLinecap="round" strokeDasharray={`${dash} ${circ}`} style={{ transition:'stroke-dasharray 0.2s,stroke 0.4s' }} />
+          </svg>
+          <div><p style={{ fontSize:20,fontWeight:800,color:ringColor,lineHeight:1,transition:'color 0.4s' }}>{displayScore}</p><p style={{ fontSize:10,color:'#4b5563' }}>/ 100</p></div>
+        </div>
+      </div>
+      <div className="flex items-start px-5 pb-4 gap-1">
+        {STEPS.map((s, i) => (
+          <React.Fragment key={i}>
+            <div className="flex flex-col items-center gap-2 flex-1" style={{ opacity:active===i?1:0.3,transition:'opacity 0.5s' }}>
+              <div style={{ width:46,height:46,borderRadius:13,display:'flex',alignItems:'center',justifyContent:'center',background:active===i?`${s.color}20`:'#1f2937',border:`1.5px solid ${active===i?s.color:'#374151'}`,color:active===i?s.color:'#4b5563',transform:active===i?'scale(1.1)':'scale(1)',transition:'all 0.4s ease','--sc':`${s.color}55`,animation:active===i?'seoNodePulse 1.6s ease-in-out infinite':'none' }}>{s.icon}</div>
+              <p style={{ fontSize:10,fontWeight:700,color:active===i?'#f9fafb':'#6b7280',textAlign:'center',transition:'color 0.4s',lineHeight:1.3 }}>{s.label}</p>
+              <p style={{ fontSize:9.5,color:active===i?s.color:'#374151',textAlign:'center',lineHeight:1.3,transition:'color 0.4s' }}>{s.sub}</p>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div style={{ display:'flex',alignItems:'center',marginTop:14,flexShrink:0,width:20,position:'relative' }}>
+                <div style={{ flex:1,height:2,background:'#1f2937',borderRadius:4,overflow:'hidden',position:'relative' }}>
+                  <div style={{ position:'absolute',inset:0,borderRadius:4,background:s.color,transform:`scaleX(${active>i?1:0})`,transformOrigin:'left',transition:'transform 0.5s ease' }} />
+                  {active===i && <div style={{ position:'absolute',top:'50%',transform:'translateY(-50%)',width:6,height:6,borderRadius:'50%',background:s.color,animation:'seoPacket 2.2s linear forwards' }} />}
+                </div>
+                <svg width="5" height="9" viewBox="0 0 5 9" style={{ flexShrink:0,marginLeft:1 }}><path d="M0 0 L5 4.5 L0 9 Z" fill={active>i?s.color:'#374151'} style={{ transition:'fill 0.5s' }} /></svg>
+              </div>
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+      <div style={{ padding:'8px 20px 12px',borderTop:'1px solid #1f293766',background:'#0f172a66' }}>
+        <p style={{ fontSize:11.5,color:'#9ca3af',textAlign:'center',minHeight:16 }}>{STEPS[active].desc}</p>
+      </div>
+    </div>
+  );
+}
+
 function HowItWorksTab() {
   return (
     <div className="max-w-3xl mx-auto space-y-10 pb-8">
+
       <Section title="1. How Collings AI Works">
+        <CollingAIFlowAnim />
         <div className="bg-gray-800/60 border border-gray-700 rounded-2xl p-6 space-y-1">
           <InfoCard number="1" title="You type a plain-English instruction">
             <p>No buttons or forms — just type what you want: <em className="text-gray-300">"Write a 500-word post about kitchen renovation tips"</em> or <em className="text-gray-300">"Update the homepage meta description"</em>.</p>
@@ -356,9 +477,67 @@ function HowItWorksTab() {
             <p>It makes a test call to your WordPress REST API. If successful, the site card appears on your Dashboard and you can start chatting immediately.</p>
           </InfoCard>
         </div>
+
+        <div className="mt-4 bg-red-900/10 border border-red-700/30 rounded-2xl p-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <div>
+              <p className="text-red-300 font-semibold text-sm mb-1">Each WordPress site can only be connected to one account</p>
+              <p className="text-gray-400 text-sm leading-relaxed">Once a site URL is added to a Collings AI account, no other user can add the same site. This is enforced at the database level and cannot be bypassed.</p>
+            </div>
+          </div>
+          <div className="border-t border-red-700/20" />
+          <div>
+            <p className="text-gray-300 text-xs font-semibold uppercase tracking-wide mb-2">Why this rule exists</p>
+            <ul className="space-y-1.5">
+              {[
+                'Two users managing the same site would queue duplicate SEO jobs — the same post gets optimised twice per cycle, wasting API credits.',
+                "If both users have different SEO plugin settings (e.g. one uses Rank Math, the other Yoast), the bots would overwrite each other's metadata every cycle.",
+                'Simultaneous chat actions from two users could issue conflicting WordPress API calls to the same post at the same time.',
+              ].map((text, i) => (
+                <li key={i} className="flex items-start gap-2.5 text-gray-400 text-xs leading-relaxed">
+                  <span className="text-amber-400 flex-shrink-0 mt-0.5">—</span>
+                  {text}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="border-t border-red-700/20" />
+          <p className="text-gray-400 text-xs leading-relaxed">
+            <strong className="text-gray-300">Team access:</strong> Share a single Collings AI account with your team rather than creating separate accounts for the same site. One account, one site, one SEO Bot — everything stays in sync.
+          </p>
+        </div>
       </Section>
 
-      <Section title="3. How the SEO Bot Works">
+      <Section title="3. Tutorial: Using the Full System">
+        <div className="bg-gray-800/60 border border-gray-700 rounded-2xl p-6 space-y-1">
+          <InfoCard number="1" title="Create content by chatting">
+            <p>Select a site card, then type your instruction. Examples:</p>
+            <ul className="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
+              <li><em className="text-gray-300">"Write a blog post about 5 tips for faster WordPress sites"</em></li>
+              <li><em className="text-gray-300">"Create a new page called About Us with a short intro"</em></li>
+              <li><em className="text-gray-300">"Edit post 42 and add a call-to-action at the end"</em></li>
+            </ul>
+          </InfoCard>
+          <InfoCard number="2" title="Schedule posts naturally">
+            <p>Include scheduling in your message: <em className="text-gray-300">"Publish this next Monday at 9am"</em>. Claude converts your local time to UTC and sets the WordPress scheduled status.</p>
+          </InfoCard>
+          <InfoCard number="3" title="Upload images in chat">
+            <p>Drag and drop or paste an image into the chat input. Claude uploads it to your WordPress media library and can attach it to any post you specify.</p>
+          </InfoCard>
+          <InfoCard number="4" title="Review and publish from WordPress">
+            <p>All content Claude creates lands as a draft. Log into your WordPress dashboard, review the post, make any final edits, and hit Publish when you're happy.</p>
+          </InfoCard>
+          <InfoCard number="5" title="Monitor SEO progress on the Dashboard">
+            <p>Each site card shows the average SEO score, a 7-day trend sparkline, how many posts have been optimised, and how many need attention. The SEO Bot handles improvements automatically in the background.</p>
+          </InfoCard>
+        </div>
+      </Section>
+
+      <Section title="4. How the SEO AI Works">
+        <SEOBotFlowAnim />
         <div className="bg-gray-800/60 border border-gray-700 rounded-2xl p-6 space-y-1">
           <InfoCard number="1" title="Every post gets an SEO score (0–100)">
             <p>The SEO Bot scores each post across 9 checks: keyword in title, meta description, first paragraph, title length, description length, keyword density, internal links, H2 headings, and word count.</p>
@@ -374,6 +553,107 @@ function HowItWorksTab() {
           </InfoCard>
         </div>
       </Section>
+
+      <Section title="5. SEO Bot Schedule">
+        <div className="bg-gray-800/60 border border-gray-700 rounded-2xl overflow-hidden">
+          <div className="grid grid-cols-[auto_auto_1fr] gap-x-4 px-5 py-2.5 border-b border-gray-700 bg-gray-800/50">
+            <span className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Cycle</span>
+            <span className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Frequency</span>
+            <span className="text-gray-500 text-xs font-semibold uppercase tracking-wide">What it processes</span>
+          </div>
+          {[
+            { cycle: 'High priority',   freq: 'Every 5 min',   dot: 'bg-red-500',     desc: 'Posts you just created or edited via chat — processed almost immediately.' },
+            { cycle: 'Medium priority', freq: 'Every 30 min',  dot: 'bg-amber-400',   desc: 'Posts scoring below 60 (Poor) — picked up from the nightly sweep queue.' },
+            { cycle: 'Low priority',    freq: 'Every hour',    dot: 'bg-emerald-500', desc: 'Posts scoring 60–79 (Needs work) — optimised gradually over time.' },
+            { cycle: 'Nightly sweep',   freq: '2:00 AM daily', dot: 'bg-brand-400',   desc: 'Scans every published post & page (up to 200 each), scores them all, and queues anything below 80.' },
+          ].map((row, i) => (
+            <div key={i} className="grid grid-cols-[auto_auto_1fr] gap-x-4 items-start px-5 py-3.5 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/20 transition-colors">
+              <div className="flex items-center gap-2 whitespace-nowrap self-center">
+                <span className={`w-2.5 h-2.5 rounded-full ${row.dot} flex-shrink-0`} />
+                <span className="text-white text-sm font-medium">{row.cycle}</span>
+              </div>
+              <span className="text-brand-300 text-sm font-semibold whitespace-nowrap self-center">{row.freq}</span>
+              <span className="text-gray-400 text-xs leading-relaxed self-center">{row.desc}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 bg-amber-900/20 border border-amber-700/30 rounded-2xl p-5 space-y-3">
+          <div className="flex items-start gap-3">
+            <svg className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div>
+              <p className="text-amber-300 text-xs font-semibold mb-1">10-job cap per cycle (shared across all sites)</p>
+              <p className="text-gray-400 text-xs leading-relaxed">Each cycle processes a maximum of 10 posts total across all your connected sites combined — not 10 per site. If you have 3 sites, those 10 slots are shared between them.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <svg className="w-4 h-4 text-brand-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <p className="text-gray-400 text-xs leading-relaxed">Once a post scores <strong className="text-white">80 or above</strong>, the bot skips it. It re-enters the queue only if you edit it again via chat, which creates a new high-priority job processed within 5 minutes.</p>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="6. SEO Improvement Guide">
+        <div className="bg-gray-800/60 border border-gray-700 rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-5 px-5 py-3 border-b border-gray-700 bg-gray-800/80">
+            <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Impact</span>
+            <span className="flex items-center gap-1.5 text-xs text-gray-300"><span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" /> High</span>
+            <span className="flex items-center gap-1.5 text-xs text-gray-300"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 flex-shrink-0" /> Medium</span>
+            <span className="flex items-center gap-1.5 text-xs text-gray-300"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" /> Low</span>
+          </div>
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-5 py-2.5 border-b border-gray-700 bg-gray-800/50">
+            <span className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Action</span>
+            <span className="text-gray-500 text-xs font-semibold uppercase tracking-wide text-center">Category</span>
+            <span className="text-gray-500 text-xs font-semibold uppercase tracking-wide text-center">Impact</span>
+            <span className="text-gray-500 text-xs font-semibold uppercase tracking-wide text-right">Time to See</span>
+          </div>
+          {[
+            { action:'Keyword research',          category:'Content',   how:'Targets what users actually search for',              impact:'high',   time:'1–3 months' },
+            { action:'Quality content',            category:'On-page',   how:'Google rewards helpful, in-depth pages',              impact:'high',   time:'2–6 months' },
+            { action:'Backlinks',                  category:'Off-page',  how:'Signals authority and trust to Google',               impact:'high',   time:'3–6 months' },
+            { action:'Page speed',                 category:'Technical', how:'Fast sites rank higher; Core Web Vitals metric',      impact:'high',   time:'2–4 weeks'  },
+            { action:'Mobile optimisation',        category:'Technical', how:'Google uses mobile-first indexing',                   impact:'high',   time:'2–4 weeks'  },
+            { action:'Meta titles & descriptions', category:'On-page',   how:'Improves click-through rate (CTR) in search results', impact:'medium', time:'1–2 weeks'  },
+            { action:'Internal linking',           category:'On-page',   how:'Distributes page authority across site',              impact:'medium', time:'1–3 months' },
+            { action:'XML sitemap',                category:'Technical', how:'Helps Google find and index all pages',               impact:'medium', time:'Days–weeks'  },
+            { action:'Image alt text',             category:'On-page',   how:'Helps Google understand image content',               impact:'medium', time:'2–4 weeks'  },
+            { action:'Schema markup',              category:'Technical', how:'Adds rich results (stars, FAQs) in search',           impact:'medium', time:'2–6 weeks'  },
+            { action:'SSL / HTTPS',                category:'Technical', how:'Google uses HTTPS as a ranking signal',               impact:'low',    time:'Immediate'  },
+            { action:'Clean URLs / permalinks',    category:'Technical', how:'Keyword-rich URLs help Google understand pages',      impact:'low',    time:'2–4 weeks'  },
+          ].map((row, i) => {
+            const dot = row.impact === 'high' ? 'bg-red-500' : row.impact === 'medium' ? 'bg-amber-400' : 'bg-emerald-500';
+            const catColor = row.category === 'Content' ? 'text-brand-300' : row.category === 'On-page' ? 'text-brand-400' : row.category === 'Off-page' ? 'text-sky-400' : 'text-teal-400';
+            return (
+              <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 items-start px-5 py-3.5 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/20 transition-colors">
+                <div>
+                  <p className="text-white text-sm font-medium">{row.action}</p>
+                  <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">{row.how}</p>
+                </div>
+                <span className={`text-xs font-semibold ${catColor} self-center`}>{row.category}</span>
+                <div className="flex items-center justify-center self-center"><span className={`w-2.5 h-2.5 rounded-full ${dot} flex-shrink-0`} /></div>
+                <span className="text-gray-400 text-xs self-center text-right whitespace-nowrap">{row.time}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 bg-brand-950/40 border border-brand-700/20 rounded-2xl p-5">
+          <p className="text-brand-300 text-xs font-semibold uppercase tracking-wide mb-3">Key Takeaways</p>
+          <ul className="space-y-2">
+            {[
+              'Quality over quantity — one in-depth post beats ten shallow ones.',
+              'Backlinks matter most — they are the strongest off-page ranking signal.',
+              'Speed is critical — Core Web Vitals directly affect your Google ranking.',
+              'SEO takes time — most improvements take weeks to months to show results.',
+              'Be consistent — regular, well-researched content compounds over time.',
+            ].map((tip, i) => (
+              <li key={i} className="flex items-start gap-2 text-gray-400 text-xs leading-relaxed">
+                <span className="w-4 h-4 bg-brand-900/60 border border-brand-700/30 rounded-full flex items-center justify-center text-brand-400 font-bold text-[10px] flex-shrink-0 mt-0.5">{i + 1}</span>
+                {tip}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Section>
+
     </div>
   );
 }

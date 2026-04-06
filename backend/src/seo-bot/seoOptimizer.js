@@ -101,4 +101,36 @@ Return ONLY the JSON object.`;
   };
 }
 
-module.exports = { optimizePost };
+// ---------------------------------------------------------------------------
+// Image alt text generator
+// ---------------------------------------------------------------------------
+
+async function generateImageAltText(mediaItem) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set in backend environment');
+
+  const client = new Anthropic({ apiKey });
+
+  const title = typeof mediaItem.title === 'object'
+    ? mediaItem.title.rendered || ''
+    : String(mediaItem.title || '');
+  const caption = typeof mediaItem.caption === 'object'
+    ? mediaItem.caption.rendered || ''
+    : String(mediaItem.caption || '');
+  const sourceUrl = mediaItem.source_url || '';
+  const filename = sourceUrl.split('/').pop().replace(/[-_]/g, ' ').replace(/\.[^.]+$/, '') || '';
+
+  const response = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 100,
+    system: 'You are an SEO expert. Generate concise, descriptive alt text for an image based on available metadata. Return ONLY the alt text string — no quotes, no explanation, max 125 characters. Do not start with "Image of" or "Photo of".',
+    messages: [{
+      role: 'user',
+      content: `Generate alt text for this image:\nTitle: ${title || '(none)'}\nCaption: ${caption || '(none)'}\nFilename hint: ${filename || '(none)'}`,
+    }],
+  });
+
+  return response.content[0].text.trim().slice(0, 125);
+}
+
+module.exports = { optimizePost, generateImageAltText };

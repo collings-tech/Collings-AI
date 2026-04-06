@@ -80,4 +80,13 @@ function buildRelatedPostsSection(internalLinks) {
   return `\n<!-- seo-bot-related-posts -->\n<h3>Related Posts</h3>\n<ul>\n${items}\n</ul>\n`;
 }
 
-module.exports = { writeSeoMeta, wpRequest };
+async function fixImageAltText(creds, mediaId, altText) {
+  return wpRequest({
+    ...creds,
+    method: 'POST',
+    endpoint: `/media/${mediaId}`,
+    data: { alt_text: altText },
+  });
+}
+
+module.exports = { writeSeoMeta, wpRequest, fixImageAltText };

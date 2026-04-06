@@ -16,7 +16,7 @@ const seoJobSchema = new mongoose.Schema(
     },
     postType: {
       type: String,
-      enum: ['post', 'page'],
+      enum: ['post', 'page', 'image'],
       default: 'post',
     },
     priority: {
@@ -32,7 +32,7 @@ const seoJobSchema = new mongoose.Schema(
     },
     triggeredBy: {
       type: String,
-      enum: ['new_post', 'nightly_sweep', 'manual', 'low_score'],
+      enum: ['new_post', 'nightly_sweep', 'manual', 'low_score', '5min_sweep', 'image_check'],
       required: true,
     },
     scheduledAt: {

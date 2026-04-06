@@ -169,6 +169,8 @@ exports.testWpConnection = async (req, res) => {
     let msg = err.message || 'Connection failed';
     if (status === 401) {
       msg = 'Authentication failed (401). Check that your WordPress username is correct and the Application Password was generated under Users → Profile → Application Passwords.';
+    } else if (status === 403) {
+      msg = 'Access forbidden (403). The WordPress REST API is being blocked — check if a security plugin (e.g. Wordfence, iThemes) is restricting REST API access, or confirm the user account has Administrator role.';
     }
     res.status(400).json({ error: msg });
   }

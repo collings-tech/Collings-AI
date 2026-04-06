@@ -12,8 +12,9 @@ const SeoLog = require('../models/SeoLog');
 const SeoSiteConfig = require('../models/SeoSiteConfig');
 const { decrypt } = require('../utils/crypto');
 const { scorePost } = require('./seoScorer');
-const { optimizePost } = require('./seoOptimizer');
-const { writeSeoMeta, wpRequest } = require('./pluginWriter');
+const Site = require('../models/Site');
+const { optimizePost, generateImageAltText } = require('./seoOptimizer');
+const { writeSeoMeta, wpRequest, fixImageAltText } = require('./pluginWriter');
 const logger = require('./logger');
 
 const MAX_JOBS_PER_CYCLE = parseInt(process.env.MAX_JOBS_PER_CYCLE || '10', 10);
@@ -111,7 +112,55 @@ async function processQueue(priorityFilter) {
 // Single job
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Image job
+// ---------------------------------------------------------------------------
+
+async function processImageJob(job, { creds }) {
+  const locked = await SeoJob.findOneAndUpdate(
+    { _id: job._id, status: 'pending' },
+    { $set: { status: 'processing', startedAt: new Date() } },
+    { new: true }
+  );
+  if (!locked) return;
+
+  logger.info('processImageJob: started', { jobId: job._id, mediaId: job.postId });
+
+  try {
+    const media = await wpRequest({ ...creds, method: 'GET', endpoint: `/media/${job.postId}` });
+
+    // Already has alt text (may have been set manually since job was queued)
+    if (media.alt_text && media.alt_text.trim() !== '') {
+      logger.info('processImageJob: alt text already present, skipping', { mediaId: job.postId });
+      await SeoJob.findByIdAndUpdate(job._id, { $set: { status: 'completed', completedAt: new Date() } });
+      return;
+    }
+
+    const altText = await generateImageAltText(media);
+    await fixImageAltText(creds, job.postId, altText);
+
+    await SeoJob.findByIdAndUpdate(job._id, { $set: { status: 'completed', completedAt: new Date() } });
+    logger.info('processImageJob: complete', { jobId: job._id, mediaId: job.postId, altText });
+
+  } catch (err) {
+    logger.error('processImageJob: error', { jobId: job._id, mediaId: job.postId, err: err.message });
+    await SeoJob.findByIdAndUpdate(job._id, {
+      $set: { status: 'failed', completedAt: new Date(), error: err.message },
+    });
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Post / page job
+// ---------------------------------------------------------------------------
+
 async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
+  // Dispatch image jobs to separate handler
+  if (job.postType === 'image') {
+    return processImageJob(job, { creds });
+  }
+
   // Atomically lock: only one worker picks a job
   const locked = await SeoJob.findOneAndUpdate(
     { _id: job._id, status: 'pending' },
@@ -157,10 +206,9 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
     const updatedPost = await wpRequest({ ...creds, method: 'GET', endpoint: `${endpoint}?context=edit` });
     const { score: scoreAfter } = scorePost(updatedPost, seoPlugin);
 
-    // 7. Save log
+    // 7. Save log — and mirror to all other users who share this WordPress URL
     const postTitle = typeof post.title === 'object' ? post.title.rendered || '' : String(post.title || '');
-    await SeoLog.create({
-      siteId: job.siteId,
+    const logEntry = {
       postId: job.postId,
       postTitle,
       scoreBefore,
@@ -172,7 +220,11 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
         internalLinksAdded: optimized.internalLinks.length,
         contentRewritten: !!optimized.rewrittenContent,
       },
-    });
+    };
+
+    // Find all site records for this WordPress URL (other users sharing the same site)
+    const coSites = await Site.find({ siteUrl: creds.siteUrl }, '_id');
+    await Promise.all(coSites.map((s) => SeoLog.create({ ...logEntry, siteId: s._id })));
 
     // 8. Mark complete
     await SeoJob.findByIdAndUpdate(job._id, { $set: { status: 'completed', completedAt: new Date() } });

@@ -10,10 +10,13 @@
 const cron = require('node-cron');
 const SeoJob = require('../models/SeoJob');
 const scheduler = require('./scheduler');
-const { runNightlySweep } = require('./nightlySweep');
+const { runNightlySweep, runQuickSweep } = require('./nightlySweep');
+const { runWeeklyPostGeneration } = require('./weeklyPostGenerator');
 const logger = require('./logger');
 
 let nightlyTask = null;
+let quickSweepTask = null;
+let weeklyPostTask = null;
 
 // ---------------------------------------------------------------------------
 // Crash recovery — reset any jobs stuck in "processing" from a prior crash
@@ -50,7 +53,21 @@ async function start() {
   // Per-priority job processing (5 min / 30 min / hourly)
   scheduler.start();
 
-  // Nightly full sweep at 2am
+  // 5-minute sweep: scan all sites for content/images below score 80, queue priority-1 jobs
+  quickSweepTask = cron.schedule('*/5 * * * *', () => {
+    runQuickSweep().catch((err) =>
+      logger.error('seo-bot: quick sweep error', { err: err.message })
+    );
+  });
+
+  // Weekly post generation — every Monday at 9am
+  weeklyPostTask = cron.schedule('0 9 * * 1', () => {
+    runWeeklyPostGeneration().catch((err) =>
+      logger.error('seo-bot: weekly post generation error', { err: err.message })
+    );
+  });
+
+  // Nightly full re-score sweep at 2am
   nightlyTask = cron.schedule('0 2 * * *', () => {
     runNightlySweep().catch((err) =>
       logger.error('seo-bot: nightly sweep error', { err: err.message })
@@ -62,6 +79,8 @@ async function start() {
 
 function stop() {
   scheduler.stop();
+  if (quickSweepTask) { try { quickSweepTask.stop(); } catch { /* ignore */ } quickSweepTask = null; }
+  if (weeklyPostTask) { try { weeklyPostTask.stop(); } catch { /* ignore */ } weeklyPostTask = null; }
   if (nightlyTask) { try { nightlyTask.stop(); } catch { /* ignore */ } nightlyTask = null; }
   logger.info('seo-bot: stopped');
 }
