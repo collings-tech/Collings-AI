@@ -23,6 +23,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// API response logger
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    console.log(
+      `[API] ${req.method} ${req.originalUrl} → ${res.statusCode}`,
+      '\nResponse:', JSON.stringify(body, null, 2)
+    );
+    return originalJson(body);
+  };
+  next();
+});
+
 // Routes
 app.use('/v1/auth', authRoutes);
 app.use('/v1/sites', sitesRoutes);
