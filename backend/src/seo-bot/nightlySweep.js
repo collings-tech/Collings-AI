@@ -97,7 +97,7 @@ async function sweepSite(site) {
   let queued = 0;
   for (const post of [...posts, ...pages]) {
     const { score } = scorePost(post, seoPlugin);
-    if (score >= 80) continue;
+    if (score >= 65) continue;
 
     const priority = score < 60 ? 2 : 3;
     const triggeredBy = score < 40 ? 'low_score' : 'nightly_sweep';
@@ -213,7 +213,7 @@ async function quickSweepSite(site) {
   let contentQueued = 0;
   for (const item of [...posts, ...pages]) {
     const { score } = scorePost(item, seoPlugin);
-    if (score >= 80) continue;
+    if (score >= 65) continue;
 
     const postType = item.type === 'page' ? 'page' : 'post';
 

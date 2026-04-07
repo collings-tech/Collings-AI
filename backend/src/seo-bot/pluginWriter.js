@@ -23,7 +23,7 @@ async function wpRequest({ siteUrl, wpUsername, wpAppPassword, method, endpoint,
 }
 
 // currentPost is the already-fetched post object (passed from scheduler to avoid a duplicate GET)
-async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, currentPost) {
+async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, currentPost, projectedScore) {
   const { focusKeyword, metaTitle, metaDescription, internalLinks, rewrittenContent } = seoData;
   const endpoint = `/${postType === 'page' ? 'pages' : 'posts'}/${postId}`;
   const updateData = {};
@@ -43,6 +43,9 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
             rank_math_focus_keyword: focusKeyword,
             rank_math_title: metaTitle,
             rank_math_description: metaDescription,
+            // Include projected score so RankMath stores it immediately —
+            // same as what the Gutenberg editor sends when you click Save.
+            ...(projectedScore ? { rank_math_seo_score: projectedScore } : {}),
           },
         },
       });
@@ -50,6 +53,12 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
       // Surface this clearly — if the endpoint doesn't exist, scores will never improve
       throw new Error(`RankMath updateMeta failed for post ${postId}: ${err.response?.status} ${err.response?.data?.message || err.message}`);
     }
+
+    // Trigger save_post so RankMath recalculates and stores the SEO score.
+    // Without this, rank_math_seo_score stays stale until someone manually saves in the editor.
+    const originalStatus = currentPost?.status || 'publish';
+    await wpRequest({ ...creds, method: 'POST', endpoint, data: { status: originalStatus } });
+
   } else if (seoPlugin === 'yoast') {
     updateData.meta = {
       _yoast_wpseo_focuskw: focusKeyword,

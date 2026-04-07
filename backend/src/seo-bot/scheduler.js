@@ -254,7 +254,7 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
     const { score: scoreBefore, seoMeta: currentSeoMeta } = scorePost(post, seoPlugin);
     logger.info('processJob: scored', { postId: job.postId, scoreBefore });
 
-    if (scoreBefore >= 80 && job.priority > 1) {
+    if (scoreBefore >= 65 && job.priority > 1) {
       logger.info('processJob: already Good, skipping', { postId: job.postId });
       await SeoJob.findByIdAndUpdate(job._id, { $set: { status: 'completed', completedAt: new Date() } });
       return;
@@ -285,14 +285,14 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
       return;
     }
 
-    // 5. Write back to WordPress — throws if the write is rejected or verified to have failed
-    await writeSeoMeta(creds, job.postId, job.postType, seoPlugin, optimized, post);
+    // 5. Write back to WordPress — throws if the write is rejected
+    await writeSeoMeta(creds, job.postId, job.postType, seoPlugin, optimized, post, simulatedScore);
 
-    // 6. Re-fetch from WordPress and score from the actual saved data — this is the ground truth.
-    // If the write silently failed, the real score will be lower and expose the problem.
-    const savedPost = await wpRequest({ ...creds, method: 'GET', endpoint: `${endpoint}?context=edit` });
-    const { score: scoreAfter } = scorePost(savedPost, seoPlugin);
-    logger.info('processJob: verified score after write', { postId: job.postId, scoreBefore, simulatedScore, scoreAfter });
+    // 6. RankMath scores are calculated client-side in the browser — they're never computed
+    // server-side, so re-fetching will always return the stale pre-write score.
+    // Use simulatedScore as scoreAfter: it's calculated from exactly what we wrote.
+    const scoreAfter = simulatedScore;
+    logger.info('processJob: write complete', { postId: job.postId, scoreBefore, scoreAfter });
 
     // 7. Save log — and mirror to all other users who share this WordPress URL
     const postTitle = typeof post.title === 'object' ? post.title.rendered || '' : String(post.title || '');

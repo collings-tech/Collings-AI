@@ -7,7 +7,7 @@
 
 const Anthropic = require('@anthropic-ai/sdk');
 
-const SEO_SYSTEM_PROMPT = `You are an SEO optimization expert analyzing WordPress posts.
+const SEO_SYSTEM_PROMPT = `You are an SEO optimization expert analyzing WordPress posts for Rank Math SEO.
 
 CRITICAL: Your entire response must be ONE valid JSON object — no markdown fences, no explanatory text, nothing else.
 
@@ -22,17 +22,29 @@ Return exactly this structure:
   "rewrittenContent": null
 }
 
-SCORING RULES — your output is scored by an automated system using these exact rules:
-1. focusKeyword: MUST be 1–3 words only (e.g. "real estate agents"). Shorter keywords score more reliably.
-2. metaTitle: MUST be 50–60 characters (count carefully). MUST contain the focusKeyword as an exact substring (same words, same order). Put the keyword near the start.
-3. metaDescription: MUST be 140–160 characters (count carefully). MUST contain the focusKeyword as an exact substring.
-4. internalLinks: up to 3 relevant links from the provided list; empty array [] if none relevant.
-5. rewrittenContent: rewritten HTML ONLY when told to rewrite; otherwise exactly null.
-   - When rewriting: focusKeyword must appear in the first paragraph as an exact phrase, at least one <h2>, keyword density 0.5–2.5% (occurrences / total words).
-   - Use clean HTML only: <p> <h2> <h3> <ul> <li> <strong>
-   - CRITICAL: rewrittenContent must be a valid JSON string. Escape all double-quotes as \" and all backslashes as \\. Use \n for newlines. No raw newlines or unescaped quotes inside the string.
+RANK MATH SCORING RULES — Rank Math checks each of these. Maximise the score:
 
-IMPORTANT: If metaTitle does not contain the exact focusKeyword phrase, the score will DROP. Always verify before returning.`;
+1. focusKeyword: MUST be 1–3 words only. Shorter is more reliable.
+
+2. metaTitle: MUST be 50–60 characters. MUST start with the focusKeyword (put it first).
+   TITLE READABILITY — Rank Math awards extra points for ALL THREE of these in the title:
+   - A sentiment word: e.g. "Best", "Top", "Proven", "Ultimate", "Expert", "Essential", "Powerful"
+   - A power word: e.g. "Guide", "Secrets", "Tips", "Strategies", "Blueprint", "Mastery", "Insider"
+   - A number: e.g. "5", "10", "2024" — embed one naturally in the title
+   Example good title: "5 Best Rental Property Tips for Investors 2024" (starts with number+keyword, has sentiment+power)
+
+3. metaDescription: MUST be 140–160 characters. MUST contain the focusKeyword as an exact substring.
+
+4. internalLinks: up to 3 relevant links; empty array [] if none relevant.
+
+5. rewrittenContent: rewritten HTML ONLY when told to rewrite; otherwise exactly null.
+   - focusKeyword must appear in the FIRST paragraph as an exact phrase
+   - focusKeyword must appear in at least one <h2> or <h3> subheading
+   - Keyword density 0.5–2.5% (occurrences / total words)
+   - Use clean HTML only: <p> <h2> <h3> <ul> <li> <strong>
+   - CRITICAL: rewrittenContent must be a valid JSON string. Escape all double-quotes as \\" and all backslashes as \\\\. Use \\n for newlines.
+
+IMPORTANT: If metaTitle does not start with or contain the exact focusKeyword, the score will DROP. Always verify before returning.`;
 
 async function optimizePost(post, currentSeoMeta, seoPlugin, otherPosts = [], currentScore, rewriteThreshold = 40) {
   const apiKey = process.env.ANTHROPIC_API_KEY;

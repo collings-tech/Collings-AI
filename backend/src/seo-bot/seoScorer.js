@@ -30,10 +30,12 @@ function calcKeywordDensity(text, keyword) {
 function extractSeoMeta(post, seoPlugin) {
   const meta = post.meta || {};
   if (seoPlugin === 'rankmath') {
+    // RankMath may expose fields via register_rest_field (top-level on the post object)
+    // or via register_meta (nested inside post.meta). Check both.
     return {
-      focusKeyword: String(meta.rank_math_focus_keyword || ''),
-      metaTitle: String(meta.rank_math_title || ''),
-      metaDescription: String(meta.rank_math_description || ''),
+      focusKeyword: String(post.rank_math_focus_keyword || meta.rank_math_focus_keyword || ''),
+      metaTitle: String(post.rank_math_title || meta.rank_math_title || ''),
+      metaDescription: String(post.rank_math_description || meta.rank_math_description || ''),
     };
   }
   if (seoPlugin === 'yoast') {
@@ -48,42 +50,79 @@ function extractSeoMeta(post, seoPlugin) {
   return { focusKeyword: '', metaTitle: stripHtml(title), metaDescription: stripHtml(excerpt) };
 }
 
+// Words Rank Math considers "positive sentiment" or "power words" for title scoring
+const SENTIMENT_WORDS = ['best', 'top', 'proven', 'ultimate', 'expert', 'essential', 'powerful', 'effective', 'reliable', 'trusted', 'leading', 'premier', 'exceptional', 'outstanding', 'superior', 'perfect', 'complete', 'comprehensive', 'definitive', 'authoritative'];
+const POWER_WORDS = ['guide', 'secrets', 'tips', 'strategies', 'blueprint', 'mastery', 'insider', 'revealed', 'discover', 'learn', 'steps', 'ways', 'mistakes', 'facts', 'reasons', 'benefits', 'solutions', 'answers', 'results', 'success'];
+
 function scorePost(post, seoPlugin) {
   const seoMeta = extractSeoMeta(post, seoPlugin);
+
   const { focusKeyword, metaTitle, metaDescription } = seoMeta;
   const contentHtml = typeof post.content === 'object' ? post.content.rendered || '' : String(post.content || '');
   const contentText = stripHtml(contentHtml);
-  const firstParagraph = contentText.slice(0, 300);
+  // First 10% of content (Rank Math checks first 10%, not just first 300 chars)
+  const first10pct = contentText.slice(0, Math.max(300, Math.floor(contentText.length * 0.1)));
 
   const breakdown = {
-    keywordInTitle: 0, keywordInDescription: 0, keywordInFirstPara: 0,
-    titleLength: 0, descriptionLength: 0, keywordDensity: 0,
-    hasInternalLink: 0, hasH2: 0, postLength: 0,
+    // Basic SEO (~40 pts)
+    keywordInTitle: 0,        // 8
+    keywordInDescription: 0,  // 4
+    keywordInUrl: 0,          // 4 — we can't control URL, assume 0
+    keywordInFirstPara: 0,    // 8
+    keywordInContent: 0,      // 4
+    contentLength: 0,         // 6
+    // Additional (~26 pts)
+    keywordInSubheading: 0,   // 4
+    keywordDensity: 0,        // 4
+    hasInternalLink: 0,       // 4
+    outboundLinks: 0,         // 4 — we don't add outbound links, assume 0
+    titleLength: 0,           // 5
+    descriptionLength: 0,     // 5
+    // Title readability (~15 pts)
+    titleSentimentWord: 0,    // 5
+    titlePowerWord: 0,        // 5
+    titleHasNumber: 0,        // 5
+    // Content readability (~10 pts — partial, we can't check all)
+    hasShortParagraphs: 0,    // 5 (assume OK if rewritten)
+    hasSubheadings: 0,        // 5
   };
 
   if (focusKeyword) {
-    if (containsKeyword(metaTitle, focusKeyword)) breakdown.keywordInTitle = 15;
-    if (containsKeyword(metaDescription, focusKeyword)) breakdown.keywordInDescription = 15;
-    if (containsKeyword(firstParagraph, focusKeyword)) breakdown.keywordInFirstPara = 10;
+    if (containsKeyword(metaTitle, focusKeyword)) breakdown.keywordInTitle = 8;
+    if (containsKeyword(metaDescription, focusKeyword)) breakdown.keywordInDescription = 4;
+    if (containsKeyword(first10pct, focusKeyword)) breakdown.keywordInFirstPara = 8;
+    if (containsKeyword(contentText, focusKeyword)) breakdown.keywordInContent = 4;
+    // Keyword in subheadings (h2/h3 text)
+    const subheadingText = (contentHtml.match(/<h[23][^>]*>(.*?)<\/h[23]>/gi) || [])
+      .map((h) => stripHtml(h)).join(' ');
+    if (containsKeyword(subheadingText, focusKeyword)) breakdown.keywordInSubheading = 4;
     const density = calcKeywordDensity(contentText, focusKeyword);
-    if (density >= 0.005 && density <= 0.025) breakdown.keywordDensity = 10;
-    else if (density > 0) breakdown.keywordDensity = 5;
+    if (density >= 0.005 && density <= 0.025) breakdown.keywordDensity = 4;
+    else if (density > 0) breakdown.keywordDensity = 2;
   }
 
+  const titleLower = metaTitle.toLowerCase();
   const titleLen = metaTitle.length;
-  if (titleLen >= 50 && titleLen <= 60) breakdown.titleLength = 10;
-  else if (titleLen >= 40 && titleLen <= 70) breakdown.titleLength = 5;
+  if (titleLen >= 50 && titleLen <= 60) breakdown.titleLength = 5;
+  else if (titleLen >= 40 && titleLen <= 70) breakdown.titleLength = 3;
 
   const descLen = metaDescription.length;
-  if (descLen >= 140 && descLen <= 160) breakdown.descriptionLength = 10;
-  else if (descLen >= 100 && descLen <= 180) breakdown.descriptionLength = 5;
+  if (descLen >= 140 && descLen <= 160) breakdown.descriptionLength = 5;
+  else if (descLen >= 100 && descLen <= 180) breakdown.descriptionLength = 3;
 
-  if (/<a\s[^>]*href=["'][^"']+["'][^>]*>/i.test(contentHtml)) breakdown.hasInternalLink = 10;
-  if (/<h2[\s>]/i.test(contentHtml)) breakdown.hasH2 = 10;
+  if (/<a\s[^>]*href=["'][^"']+["'][^>]*>/i.test(contentHtml)) breakdown.hasInternalLink = 4;
+  if (/<h[23][\s>]/i.test(contentHtml)) breakdown.hasSubheadings = 5;
+  if (/<p[\s>]/i.test(contentHtml)) breakdown.hasShortParagraphs = 5; // assume OK if has paragraphs
+
+  // Title readability
+  if (SENTIMENT_WORDS.some((w) => titleLower.includes(w))) breakdown.titleSentimentWord = 5;
+  if (POWER_WORDS.some((w) => titleLower.includes(w))) breakdown.titlePowerWord = 5;
+  if (/\d/.test(metaTitle)) breakdown.titleHasNumber = 5;
 
   const words = wordCount(contentText);
-  if (words > 300) breakdown.postLength = 10;
-  else if (words > 150) breakdown.postLength = 5;
+  if (words >= 600) breakdown.contentLength = 6;
+  else if (words >= 300) breakdown.contentLength = 4;
+  else if (words >= 150) breakdown.contentLength = 2;
 
   const score = Object.values(breakdown).reduce((a, b) => a + b, 0);
   return { score, breakdown, seoMeta };
@@ -97,11 +136,16 @@ function simulateScore(currentPost, seoPlugin, optimized) {
   const simulatedPost = { ...currentPost };
 
   if (seoPlugin === 'rankmath') {
+    // Set in both locations to match whichever way extractSeoMeta finds them
+    simulatedPost.rank_math_focus_keyword = optimized.focusKeyword;
+    simulatedPost.rank_math_title = optimized.metaTitle;
+    simulatedPost.rank_math_description = optimized.metaDescription;
     simulatedPost.meta = {
       ...(currentPost.meta || {}),
       rank_math_focus_keyword: optimized.focusKeyword,
       rank_math_title: optimized.metaTitle,
       rank_math_description: optimized.metaDescription,
+      rank_math_seo_score: 0, // clear so we fall through to custom calculation
     };
   } else if (seoPlugin === 'yoast') {
     simulatedPost.meta = {
