@@ -17,7 +17,7 @@ const seoSiteConfigSchema = new mongoose.Schema(
       enum: ['rankmath', 'yoast', 'none'],
       default: 'none',
     },
-    scoreThresholdRewrite: { type: Number, default: 40 },
+    scoreThresholdRewrite: { type: Number, default: 60 },
     sweepSchedule: { type: String, default: '0 2 * * *' },
     maxJobsPerCycle: { type: Number, default: 10 },
     lastSweptAt: { type: Date, default: null },

@@ -6,6 +6,7 @@
  */
 
 const cron = require('node-cron');
+const axios = require('axios');
 const Site = require('../models/Site');
 const SeoJob = require('../models/SeoJob');
 const SeoLog = require('../models/SeoLog');
@@ -17,7 +18,22 @@ const { writeSeoMeta, wpRequest, fixImageAltText } = require('./pluginWriter');
 const logger = require('./logger');
 
 const MAX_JOBS_PER_CYCLE = parseInt(process.env.MAX_JOBS_PER_CYCLE || '10', 10);
-const SEO_REWRITE_THRESHOLD = parseInt(process.env.SEO_REWRITE_THRESHOLD || '40', 10);
+const SEO_REWRITE_THRESHOLD = parseInt(process.env.SEO_REWRITE_THRESHOLD || '60', 10);
+
+// ---------------------------------------------------------------------------
+// Auto-detect SEO plugin by probing WP REST API namespaces
+// ---------------------------------------------------------------------------
+
+async function detectSeoPlugin(creds) {
+  try {
+    const url = `${creds.siteUrl}/wp-json`;
+    const res = await axios.get(url, { timeout: 8000 });
+    const namespaces = res.data?.namespaces || [];
+    if (namespaces.some((n) => n.startsWith('rankmath'))) return 'rankmath';
+    if (namespaces.some((n) => n.startsWith('yoast'))) return 'yoast';
+  } catch { /* non-critical */ }
+  return 'none';
+}
 const MAX_RETRIES = 3;
 
 // Transient HTTP/network errors that warrant a retry
@@ -107,15 +123,27 @@ async function processQueue(priorityFilter) {
         if (!site) continue;
 
         let config = await SeoSiteConfig.findOne({ siteId: site._id });
-        if (!config) config = { enabled: true, seoPlugin: 'none', scoreThresholdRewrite: SEO_REWRITE_THRESHOLD };
+        if (!config) config = await SeoSiteConfig.create({ siteId: site._id, seoPlugin: 'none', scoreThresholdRewrite: SEO_REWRITE_THRESHOLD });
         if (!config.enabled) continue;
 
         let wpAppPassword;
         try { wpAppPassword = decrypt(site.wpAppPassword); }
         catch (err) { logger.error('processQueue: decrypt failed', { siteId, err: err.message }); continue; }
 
+        const creds = { siteUrl: site.siteUrl, wpUsername: site.wpUsername, wpAppPassword };
+
+        // Auto-detect SEO plugin if not yet configured
+        if (!config.seoPlugin || config.seoPlugin === 'none') {
+          const detected = await detectSeoPlugin(creds);
+          if (detected !== 'none') {
+            await SeoSiteConfig.findByIdAndUpdate(config._id, { $set: { seoPlugin: detected } });
+            config.seoPlugin = detected;
+            logger.info('scheduler: auto-detected SEO plugin', { siteId, plugin: detected });
+          }
+        }
+
         sitesMap.set(siteId, {
-          creds: { siteUrl: site.siteUrl, wpUsername: site.wpUsername, wpAppPassword },
+          creds,
           seoPlugin: config.seoPlugin || 'none',
           rewriteThreshold: config.scoreThresholdRewrite || SEO_REWRITE_THRESHOLD,
         });

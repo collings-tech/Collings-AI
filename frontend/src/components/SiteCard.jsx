@@ -193,6 +193,92 @@ function AttentionDropdown({ posts, siteId, onClose }) {
   );
 }
 
+function SeoBotConfigPanel({ siteId, onClose }) {
+  const [config, setConfig] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const c = (await import('../api/client')).default;
+        const res = await c.get(`/seo/config/${siteId}`);
+        setConfig(res.data);
+      } catch { setConfig({ seoPlugin: 'none', scoreThresholdRewrite: 60 }); }
+    })();
+  }, [siteId]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const c = (await import('../api/client')).default;
+      const res = await c.put(`/seo/config/${siteId}`, {
+        seoPlugin: config.seoPlugin,
+        scoreThresholdRewrite: config.scoreThresholdRewrite,
+      });
+      setConfig(res.data);
+      setMsg({ type: 'ok', text: 'Saved!' });
+      setTimeout(() => setMsg(null), 2000);
+    } catch (err) {
+      setMsg({ type: 'err', text: err.message || 'Save failed' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 bg-gray-900 border border-brand-700/30 rounded-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="px-3 py-2 border-b border-gray-700/60 flex items-center justify-between">
+        <span className="text-brand-400 text-xs font-semibold">SEO Bot Settings</span>
+        <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="text-gray-600 hover:text-gray-400 text-xs">✕</button>
+      </div>
+      {!config ? (
+        <div className="px-3 py-4 text-gray-500 text-xs">Loading…</div>
+      ) : (
+        <div className="p-3 space-y-3">
+          <div>
+            <label className="block text-gray-400 text-xs font-semibold mb-1 uppercase tracking-wide">SEO Plugin</label>
+            <select
+              value={config.seoPlugin}
+              onChange={(e) => setConfig({ ...config, seoPlugin: e.target.value })}
+              className="w-full bg-gray-800 border border-gray-600 focus:border-brand-500 text-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+            >
+              <option value="none">None (no plugin)</option>
+              <option value="rankmath">Rank Math</option>
+              <option value="yoast">Yoast SEO</option>
+            </select>
+            <p className="text-gray-600 text-xs mt-1">Must match the plugin installed on your WordPress site. Unlocks up to 40 extra points.</p>
+          </div>
+          <div>
+            <label className="block text-gray-400 text-xs font-semibold mb-1 uppercase tracking-wide">
+              Rewrite Threshold: <span className="text-brand-400">{config.scoreThresholdRewrite}</span>
+            </label>
+            <input
+              type="range"
+              min={20} max={80} step={5}
+              value={config.scoreThresholdRewrite}
+              onChange={(e) => setConfig({ ...config, scoreThresholdRewrite: Number(e.target.value) })}
+              className="w-full accent-brand-500"
+            />
+            <p className="text-gray-600 text-xs mt-1">Posts scoring below this get their content fully rewritten. Set to 60–70 to reach 80+.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 py-1.5 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            {msg && <span className={`text-xs ${msg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{msg.text}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId }) {
 
   const handleDelete = (e) => {
@@ -203,6 +289,7 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
   };
 
   const [showAttention, setShowAttention] = useState(false);
+  const [showBotConfig, setShowBotConfig] = useState(false);
   const { avgScore, postsOptimized, attentionCount, lastBotRun, pendingJobs, failedJobs, trend, attentionPosts } = seoStats || {};
   const hasSeoData = seoStats !== null && seoStats !== undefined;
   const colors = scoreColor(avgScore ?? null);
@@ -294,10 +381,26 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-gray-500 text-xs">SEO Bot active</span>
             <div className="flex-1" />
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowBotConfig((v) => !v); }}
+              className="p-1 rounded-lg text-gray-600 hover:text-brand-400 hover:bg-gray-700/50 transition-colors"
+              title="SEO Bot settings"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
             <svg className="w-3.5 h-3.5 text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </div>
+
+          {showBotConfig && (
+            <div className="px-5 pb-3">
+              <SeoBotConfigPanel siteId={siteId} onClose={() => setShowBotConfig(false)} />
+            </div>
+          )}
         </>
       ) : (
         <div className="px-5 pb-5 flex items-center justify-between mt-auto">

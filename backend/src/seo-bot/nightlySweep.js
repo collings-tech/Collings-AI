@@ -8,10 +8,21 @@
 const Site = require('../models/Site');
 const SeoJob = require('../models/SeoJob');
 const SeoSiteConfig = require('../models/SeoSiteConfig');
+const axios = require('axios');
 const { decrypt } = require('../utils/crypto');
 const { scorePost } = require('./seoScorer');
 const { wpRequest } = require('./pluginWriter');
 const logger = require('./logger');
+
+async function detectSeoPlugin(siteUrl) {
+  try {
+    const res = await axios.get(`${siteUrl}/wp-json`, { timeout: 8000 });
+    const namespaces = res.data?.namespaces || [];
+    if (namespaces.some((n) => n.startsWith('rankmath'))) return 'rankmath';
+    if (namespaces.some((n) => n.startsWith('yoast'))) return 'yoast';
+  } catch { /* non-critical */ }
+  return 'none';
+}
 
 const MAX_POSTS_PER_TYPE = 200;
 
@@ -45,7 +56,7 @@ function deduplicateBySiteUrl(sites) {
 
 async function sweepSite(site) {
   let config = await SeoSiteConfig.findOne({ siteId: site._id });
-  if (!config) config = { enabled: true, seoPlugin: 'none', scoreThresholdRewrite: 40 };
+  if (!config) config = await SeoSiteConfig.create({ siteId: site._id });
   if (!config.enabled) {
     logger.info('Nightly sweep: bot disabled for site', { siteId: site._id, label: site.label });
     return;
@@ -60,6 +71,17 @@ async function sweepSite(site) {
   }
 
   const creds = { siteUrl: site.siteUrl, wpUsername: site.wpUsername, wpAppPassword };
+
+  // Auto-detect SEO plugin if not yet configured
+  if (!config.seoPlugin || config.seoPlugin === 'none') {
+    const detected = await detectSeoPlugin(site.siteUrl);
+    if (detected !== 'none') {
+      await SeoSiteConfig.findByIdAndUpdate(config._id, { $set: { seoPlugin: detected } });
+      config.seoPlugin = detected;
+      logger.info('Nightly sweep: auto-detected SEO plugin', { siteId: site._id, plugin: detected });
+    }
+  }
+
   const seoPlugin = config.seoPlugin || 'none';
 
   const [posts, pages] = await Promise.all([
@@ -154,7 +176,7 @@ async function runQuickSweep() {
 
 async function quickSweepSite(site) {
   let config = await SeoSiteConfig.findOne({ siteId: site._id });
-  if (!config) config = { enabled: true, seoPlugin: 'none', scoreThresholdRewrite: 40 };
+  if (!config) config = await SeoSiteConfig.create({ siteId: site._id });
   if (!config.enabled) return;
 
   let wpAppPassword;
@@ -166,7 +188,18 @@ async function quickSweepSite(site) {
   }
 
   const creds = { siteUrl: site.siteUrl, wpUsername: site.wpUsername, wpAppPassword };
-  const seoPlugin = (config.seoPlugin) || 'none';
+
+  // Auto-detect SEO plugin if not yet configured
+  if (!config.seoPlugin || config.seoPlugin === 'none') {
+    const detected = await detectSeoPlugin(site.siteUrl);
+    if (detected !== 'none') {
+      await SeoSiteConfig.findByIdAndUpdate(config._id, { $set: { seoPlugin: detected } });
+      config.seoPlugin = detected;
+      logger.info('Quick sweep: auto-detected SEO plugin', { siteId: site._id, plugin: detected });
+    }
+  }
+
+  const seoPlugin = config.seoPlugin || 'none';
 
   // Scan posts and pages
   const [posts, pages] = await Promise.all([
