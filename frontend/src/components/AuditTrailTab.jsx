@@ -168,9 +168,9 @@ function LogEntry({ log }) {
             {log.changes.focusKeyword?.after && (
               <div>
                 <p className="text-xs font-semibold text-brand-400 uppercase tracking-wide mb-1">Focus Keyword</p>
-                {log.changes.focusKeyword.before && (
-                  <p className="text-xs text-gray-500 line-through">{log.changes.focusKeyword.before}</p>
-                )}
+                <p className="text-xs text-gray-500 line-through">
+                  {log.changes.focusKeyword.before || <span className="italic">Not set</span>}
+                </p>
                 <p className="text-xs text-gray-200">{log.changes.focusKeyword.after}</p>
               </div>
             )}
@@ -178,9 +178,9 @@ function LogEntry({ log }) {
             {log.changes.metaTitle?.after && (
               <div>
                 <p className="text-xs font-semibold text-brand-400 uppercase tracking-wide mb-1">Meta Title</p>
-                {log.changes.metaTitle.before && (
-                  <p className="text-xs text-gray-500 line-through leading-relaxed">{log.changes.metaTitle.before}</p>
-                )}
+                <p className="text-xs text-gray-500 line-through leading-relaxed">
+                  {log.changes.metaTitle.before || <span className="italic">Not set</span>}
+                </p>
                 <p className="text-xs text-gray-200 leading-relaxed">{log.changes.metaTitle.after}</p>
               </div>
             )}
@@ -188,9 +188,9 @@ function LogEntry({ log }) {
             {log.changes.metaDescription?.after && (
               <div>
                 <p className="text-xs font-semibold text-brand-400 uppercase tracking-wide mb-1">Meta Description</p>
-                {log.changes.metaDescription.before && (
-                  <p className="text-xs text-gray-500 line-through leading-relaxed">{log.changes.metaDescription.before}</p>
-                )}
+                <p className="text-xs text-gray-500 line-through leading-relaxed">
+                  {log.changes.metaDescription.before || <span className="italic">Not set</span>}
+                </p>
                 <p className="text-xs text-gray-200 leading-relaxed">{log.changes.metaDescription.after}</p>
               </div>
             )}

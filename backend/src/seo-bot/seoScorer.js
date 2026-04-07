@@ -114,8 +114,27 @@ function simulateScore(currentPost, seoPlugin, optimized) {
     simulatedPost.excerpt = { rendered: optimized.metaDescription };
   }
 
+  // Simulate the final content state — exactly what will be written to WordPress
   if (optimized.rewrittenContent) {
-    simulatedPost.content = { rendered: optimized.rewrittenContent, raw: optimized.rewrittenContent };
+    // Unescape JSON-encoded content so the scorer sees clean HTML
+    const cleanHtml = optimized.rewrittenContent
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
+    simulatedPost.content = { rendered: cleanHtml, raw: cleanHtml };
+  } else if (optimized.internalLinks && optimized.internalLinks.length > 0) {
+    // Simulate the related posts section that writeSeoMeta appends
+    const currentContent = typeof currentPost.content === 'object'
+      ? currentPost.content.raw || currentPost.content.rendered || ''
+      : String(currentPost.content || '');
+    const valid = optimized.internalLinks.filter((l) => l && l.url && l.anchorText);
+    if (valid.length > 0 && !currentContent.includes('<!-- seo-bot-related-posts -->')) {
+      const items = valid.map((l) =>
+        `<li><a href="${l.url}">${l.anchorText}</a></li>`
+      ).join('\n');
+      const relatedSection = `\n<!-- seo-bot-related-posts -->\n<h3>Related Posts</h3>\n<ul>\n${items}\n</ul>\n`;
+      simulatedPost.content = { rendered: currentContent + relatedSection, raw: currentContent + relatedSection };
+    }
   }
 
   return scorePost(simulatedPost, seoPlugin);
