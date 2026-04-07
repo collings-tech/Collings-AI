@@ -89,4 +89,36 @@ function scorePost(post, seoPlugin) {
   return { score, breakdown, seoMeta };
 }
 
-module.exports = { scorePost, extractSeoMeta, stripHtml };
+/**
+ * Build a fake post object that reflects the optimized meta values, then score it.
+ * Used to verify the new values will actually increase the score before writing to WP.
+ */
+function simulateScore(currentPost, seoPlugin, optimized) {
+  const simulatedPost = { ...currentPost };
+
+  if (seoPlugin === 'rankmath') {
+    simulatedPost.meta = {
+      ...(currentPost.meta || {}),
+      rank_math_focus_keyword: optimized.focusKeyword,
+      rank_math_title: optimized.metaTitle,
+      rank_math_description: optimized.metaDescription,
+    };
+  } else if (seoPlugin === 'yoast') {
+    simulatedPost.meta = {
+      ...(currentPost.meta || {}),
+      _yoast_wpseo_focuskw: optimized.focusKeyword,
+      _yoast_wpseo_title: optimized.metaTitle,
+      _yoast_wpseo_metadesc: optimized.metaDescription,
+    };
+  } else {
+    simulatedPost.excerpt = { rendered: optimized.metaDescription };
+  }
+
+  if (optimized.rewrittenContent) {
+    simulatedPost.content = { rendered: optimized.rewrittenContent, raw: optimized.rewrittenContent };
+  }
+
+  return scorePost(simulatedPost, seoPlugin);
+}
+
+module.exports = { scorePost, simulateScore, extractSeoMeta, stripHtml };

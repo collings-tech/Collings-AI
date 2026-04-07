@@ -11,7 +11,7 @@ const SeoJob = require('../models/SeoJob');
 const SeoLog = require('../models/SeoLog');
 const SeoSiteConfig = require('../models/SeoSiteConfig');
 const { decrypt } = require('../utils/crypto');
-const { scorePost } = require('./seoScorer');
+const { scorePost, simulateScore } = require('./seoScorer');
 const { optimizePost, generateImageAltText } = require('./seoOptimizer');
 const { writeSeoMeta, wpRequest, fixImageAltText } = require('./pluginWriter');
 const logger = require('./logger');
@@ -228,6 +228,19 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
 
     // 4. Ask Claude
     const optimized = await optimizePost(post, currentSeoMeta, seoPlugin, otherPosts || [], scoreBefore, rewriteThreshold);
+
+    // 4b. Simulate the score with the new values before touching WordPress.
+    // If the optimized values would not improve the score, skip writing entirely.
+    const { score: simulatedScore } = simulateScore(post, seoPlugin, optimized);
+    logger.info('processJob: simulated score', { postId: job.postId, scoreBefore, simulatedScore });
+
+    if (simulatedScore <= scoreBefore) {
+      logger.warn('processJob: optimized values would not improve score — skipping write', {
+        postId: job.postId, scoreBefore, simulatedScore,
+      });
+      await SeoJob.findByIdAndUpdate(job._id, { $set: { status: 'completed', completedAt: new Date() } });
+      return;
+    }
 
     // 5. Write back to WordPress (pass already-fetched post to avoid a redundant GET)
     await writeSeoMeta(creds, job.postId, job.postType, seoPlugin, optimized, post);

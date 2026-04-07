@@ -22,14 +22,16 @@ Return exactly this structure:
   "rewrittenContent": null
 }
 
-Rules:
-- focusKeyword: 1–3 words, primary search intent, no brand names
-- metaTitle: 50–60 characters, keyword near the start, compelling and click-worthy
-- metaDescription: 140–160 characters, includes keyword, summarises the post value
-- internalLinks: up to 3 relevant links from the provided list; empty array [] if none relevant
-- rewrittenContent: rewritten HTML ONLY when told to rewrite; otherwise exactly null
-  - When rewriting: keyword in first paragraph, at least one <h2>, keyword density 0.5–2.5%
-  - Use clean HTML: <p> <h2> <h3> <ul> <li> <strong> only`;
+SCORING RULES — your output is scored by an automated system using these exact rules:
+1. focusKeyword: MUST be 1–3 words only (e.g. "real estate agents"). Shorter keywords score more reliably.
+2. metaTitle: MUST be 50–60 characters (count carefully). MUST contain the focusKeyword as an exact substring (same words, same order). Put the keyword near the start.
+3. metaDescription: MUST be 140–160 characters (count carefully). MUST contain the focusKeyword as an exact substring.
+4. internalLinks: up to 3 relevant links from the provided list; empty array [] if none relevant.
+5. rewrittenContent: rewritten HTML ONLY when told to rewrite; otherwise exactly null.
+   - When rewriting: focusKeyword must appear in the first paragraph as an exact phrase, at least one <h2>, keyword density 0.5–2.5% (occurrences / total words).
+   - Use clean HTML only: <p> <h2> <h3> <ul> <li> <strong>
+
+IMPORTANT: If metaTitle does not contain the exact focusKeyword phrase, the score will DROP. Always verify before returning.`;
 
 async function optimizePost(post, currentSeoMeta, seoPlugin, otherPosts = [], currentScore, rewriteThreshold = 40) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -67,11 +69,14 @@ Other published posts available for internal linking:
 ${otherPostsText}
 
 Task:
-1. Generate improved focusKeyword, metaTitle, metaDescription.
-2. Suggest up to 3 internal links from the list above that are topically relevant.${shouldRewrite
-    ? `\n3. REWRITE the full post content — score ${currentScore} is below rewrite threshold ${rewriteThreshold}. Return clean HTML in rewrittenContent.`
-    : `\n3. Do NOT rewrite content (score ${currentScore} is above rewrite threshold). Set rewrittenContent to null.`}
+1. Choose a focusKeyword of 1–3 words that best represents this post's search intent.
+2. Write a metaTitle that is EXACTLY 50–60 characters and contains the focusKeyword as an exact substring.
+3. Write a metaDescription that is EXACTLY 140–160 characters and contains the focusKeyword as an exact substring.
+4. Suggest up to 3 internal links from the list above that are topically relevant.${shouldRewrite
+    ? `\n5. REWRITE the full post content — score ${currentScore} is below rewrite threshold ${rewriteThreshold}. Return clean HTML in rewrittenContent. The focusKeyword must appear as an exact phrase in the first paragraph.`
+    : `\n5. Do NOT rewrite content (score ${currentScore} is above rewrite threshold). Set rewrittenContent to null.`}
 
+Before returning, verify: does metaTitle contain the focusKeyword exactly? Is metaTitle 50–60 chars? Is metaDescription 140–160 chars?
 Return ONLY the JSON object.`;
 
   const response = await client.messages.create({
