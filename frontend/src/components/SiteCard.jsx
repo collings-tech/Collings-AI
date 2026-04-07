@@ -31,7 +31,7 @@ function minsUntilNextScan() {
   const now = new Date();
   const currentMin = now.getMinutes();
   const currentSec = now.getSeconds();
-  const nextBoundary = Math.ceil((currentMin + currentSec / 60) / 5) * 5;
+  const nextBoundary = Math.ceil((currentMin + currentSec / 60) / 15) * 15;
   return Math.max(0, Math.round(nextBoundary - currentMin - currentSec / 60));
 }
 
@@ -319,6 +319,31 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
 
   const [showAttention, setShowAttention] = useState(false);
   const [showBotConfig, setShowBotConfig] = useState(false);
+  const [botEnabled, setBotEnabled] = useState(true);
+  const [togglingBot, setTogglingBot] = useState(false);
+
+  useEffect(() => {
+    if (!siteId) return;
+    (async () => {
+      try {
+        const c = (await import('../api/client')).default;
+        const res = await c.get(`/seo/config/${siteId}`);
+        setBotEnabled(res.data.enabled !== false);
+      } catch { /* keep default true */ }
+    })();
+  }, [siteId]);
+
+  const handleToggleBot = async (e) => {
+    e.stopPropagation();
+    setTogglingBot(true);
+    try {
+      const c = (await import('../api/client')).default;
+      const res = await c.put(`/seo/config/${siteId}`, { enabled: !botEnabled });
+      setBotEnabled(res.data.enabled);
+    } catch { /* silent */ }
+    finally { setTogglingBot(false); }
+  };
+
   const { avgScore, postsOptimized, attentionCount, lastBotRun, pendingJobs, failedJobs, trend, attentionPosts } = seoStats || {};
   const hasSeoData = seoStats !== null && seoStats !== undefined;
   const colors = scoreColor(avgScore ?? null);
@@ -406,10 +431,22 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
             <JobStatusBar pendingJobs={pendingJobs ?? 0} failedJobs={failedJobs ?? 0} />
           </div>
 
-          <div className="px-5 pb-3 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-gray-500 text-xs">SEO Bot active</span>
+          <div className="px-5 pb-3 flex items-center gap-2">
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${botEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`} />
+            <span className="text-gray-500 text-xs">SEO Bot</span>
+            <span className={`text-xs font-medium ${botEnabled ? 'text-emerald-400' : 'text-gray-500'}`}>
+              {botEnabled ? 'Active' : 'Inactive'}
+            </span>
             <div className="flex-1" />
+            {/* Toggle switch */}
+            <button
+              onClick={handleToggleBot}
+              disabled={togglingBot}
+              className={`relative w-9 h-5 rounded-full transition-colors duration-200 flex-shrink-0 focus:outline-none ${botEnabled ? 'bg-emerald-500' : 'bg-gray-600'} disabled:opacity-50`}
+              title={botEnabled ? 'Disable SEO Bot' : 'Enable SEO Bot'}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${botEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+            </button>
             <button
               onClick={(e) => { e.stopPropagation(); setShowBotConfig((v) => !v); }}
               className="p-1 rounded-lg text-gray-600 hover:text-brand-400 hover:bg-gray-700/50 transition-colors"

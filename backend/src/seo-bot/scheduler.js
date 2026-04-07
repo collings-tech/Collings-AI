@@ -73,7 +73,7 @@ let isProcessing = false;
 // ---------------------------------------------------------------------------
 
 function start() {
-  const highTask = cron.schedule('*/5 * * * *', () => {
+  const highTask = cron.schedule('*/15 * * * *', () => {
     processQueue(1).catch((err) => logger.error('scheduler: high-priority error', { err: err.message }));
   }, { scheduled: false });
 
@@ -89,7 +89,7 @@ function start() {
   medTask.start();
   lowTask.start();
   tasks = [highTask, medTask, lowTask];
-  logger.info('scheduler: started (high=5m, medium=30m, low=1h)');
+  logger.info('scheduler: started (high=15m, medium=30m, low=1h)');
 }
 
 function stop() {
