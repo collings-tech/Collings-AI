@@ -73,7 +73,7 @@ let isProcessing = false;
 // ---------------------------------------------------------------------------
 
 function start() {
-  const highTask = cron.schedule('*/15 * * * *', () => {
+  const highTask = cron.schedule('*/5 * * * *', () => {
     processQueue(1).catch((err) => logger.error('scheduler: high-priority error', { err: err.message }));
   }, { scheduled: false });
 
