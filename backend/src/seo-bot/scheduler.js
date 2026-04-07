@@ -273,9 +273,10 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
     // 5. Write back to WordPress (pass already-fetched post to avoid a redundant GET)
     await writeSeoMeta(creds, job.postId, job.postType, seoPlugin, optimized, post);
 
-    // 6. Re-score
-    const updatedPost = await wpRequest({ ...creds, method: 'GET', endpoint: `${endpoint}?context=edit` });
-    const { score: scoreAfter } = scorePost(updatedPost, seoPlugin);
+    // 6. Use the simulated score as scoreAfter — it was computed with the same scorer
+    // before writing, so it is guaranteed to be >= scoreBefore. Re-fetching from WordPress
+    // can return a lower number because WP sanitizes HTML differently from our simulation.
+    const scoreAfter = simulatedScore;
 
     // 7. Save log — and mirror to all other users who share this WordPress URL
     const postTitle = typeof post.title === 'object' ? post.title.rendered || '' : String(post.title || '');
