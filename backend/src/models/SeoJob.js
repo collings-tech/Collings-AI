@@ -42,6 +42,7 @@ const seoJobSchema = new mongoose.Schema(
     startedAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
     error: { type: String, default: null },
+    retryCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

@@ -1,7 +1,6 @@
 'use strict';
 
 const axios = require('axios');
-const logger = require('./logger');
 
 function buildAuthHeader(wpUsername, wpAppPassword) {
   return 'Basic ' + Buffer.from(`${wpUsername}:${wpAppPassword}`).toString('base64');
@@ -23,7 +22,8 @@ async function wpRequest({ siteUrl, wpUsername, wpAppPassword, method, endpoint,
   return response.data;
 }
 
-async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData) {
+// currentPost is the already-fetched post object (passed from scheduler to avoid a duplicate GET)
+async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, currentPost) {
   const { focusKeyword, metaTitle, metaDescription, internalLinks, rewrittenContent } = seoData;
   const endpoint = `/${postType === 'page' ? 'pages' : 'posts'}/${postId}`;
   const updateData = {};
@@ -45,17 +45,9 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData) {
   }
 
   if (rewrittenContent || (internalLinks && internalLinks.length > 0)) {
-    // Fetch current post to preserve its published/draft status and get raw content
-    let currentPost;
-    try {
-      currentPost = await wpRequest({ ...creds, method: 'GET', endpoint: `${endpoint}?context=edit` });
-    } catch (err) {
-      logger.warn('pluginWriter: could not fetch post', { postId, err: err.message });
-    }
-
-    // Preserve the post's existing status — if it was published, keep it published
+    // Pages are always published after SEO optimization; posts preserve their existing status
     const originalStatus = currentPost?.status || 'draft';
-    const preservedStatus = originalStatus === 'publish' ? 'publish' : 'draft';
+    const preservedStatus = postType === 'page' ? 'publish' : (originalStatus === 'publish' ? 'publish' : 'draft');
 
     if (rewrittenContent) {
       updateData.content = rewrittenContent;

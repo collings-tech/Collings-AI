@@ -53,8 +53,9 @@ async function start() {
   // Per-priority job processing (5 min / 30 min / hourly)
   scheduler.start();
 
-  // 5-minute sweep: scan all sites for content/images below score 80, queue priority-1 jobs
-  quickSweepTask = cron.schedule('*/5 * * * *', () => {
+  // 5-minute sweep: scan all sites for content/images below score 80, queue priority-1 jobs.
+  // Offset by 2 minutes so it doesn't fire at the same time as the scheduler (*/5) and flood WordPress.
+  quickSweepTask = cron.schedule('2-59/5 * * * *', () => {
     runQuickSweep().catch((err) =>
       logger.error('seo-bot: quick sweep error', { err: err.message })
     );

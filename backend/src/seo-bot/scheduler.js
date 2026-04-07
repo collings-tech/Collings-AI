@@ -18,6 +18,36 @@ const logger = require('./logger');
 
 const MAX_JOBS_PER_CYCLE = parseInt(process.env.MAX_JOBS_PER_CYCLE || '10', 10);
 const SEO_REWRITE_THRESHOLD = parseInt(process.env.SEO_REWRITE_THRESHOLD || '40', 10);
+const MAX_RETRIES = 3;
+
+// Transient HTTP/network errors that warrant a retry
+function isTransientError(err) {
+  const status = err?.response?.status;
+  if (status && [429, 500, 502, 503, 504].includes(status)) return true;
+  const code = err?.code;
+  if (code && ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND', 'EPIPE'].includes(code)) return true;
+  return false;
+}
+
+async function retryOrFail(job, err) {
+  if (isTransientError(err) && (job.retryCount || 0) < MAX_RETRIES) {
+    const retryCount = (job.retryCount || 0) + 1;
+    // Exponential back-off: 5m, 15m, 45m
+    const delayMs = Math.pow(3, retryCount - 1) * 5 * 60 * 1000;
+    const scheduledAt = new Date(Date.now() + delayMs);
+    await SeoJob.findByIdAndUpdate(job._id, {
+      $set: { status: 'pending', startedAt: null, completedAt: null, error: err.message, retryCount, scheduledAt },
+    });
+    logger.warn('scheduler: transient error, will retry', {
+      jobId: job._id, postId: job.postId, retryCount, delayMin: Math.round(delayMs / 60000), err: err.message,
+    });
+  } else {
+    await SeoJob.findByIdAndUpdate(job._id, {
+      $set: { status: 'failed', completedAt: new Date(), error: err.message },
+    });
+    logger.error('scheduler: job permanently failed', { jobId: job._id, postId: job.postId, err: err.message });
+  }
+}
 
 let tasks = [];
 let isProcessing = false;
@@ -60,8 +90,8 @@ async function processQueue(priorityFilter) {
   if (isProcessing) return;
   isProcessing = true;
   try {
-    // Find all pending jobs at this priority, sorted by priority asc then age asc
-    const jobs = await SeoJob.find({ priority: priorityFilter, status: 'pending' })
+    // Find all pending jobs at this priority that are due (scheduledAt <= now)
+    const jobs = await SeoJob.find({ priority: priorityFilter, status: 'pending', scheduledAt: { $lte: new Date() } })
       .sort({ priority: 1, createdAt: 1 })
       .limit(MAX_JOBS_PER_CYCLE);
 
@@ -97,8 +127,11 @@ async function processQueue(priorityFilter) {
       try {
         await processJob(job, siteCtx);
       } catch (err) {
-        // processJob handles its own failJob — just continue
+        // processJob handles its own retry/fail — just continue
       }
+
+      // Small delay between jobs to avoid overwhelming the WordPress server
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
     logger.info('processQueue: cycle complete', { priority: priorityFilter, processed: jobs.length });
@@ -143,9 +176,7 @@ async function processImageJob(job, { creds }) {
 
   } catch (err) {
     logger.error('processImageJob: error', { jobId: job._id, mediaId: job.postId, err: err.message });
-    await SeoJob.findByIdAndUpdate(job._id, {
-      $set: { status: 'failed', completedAt: new Date(), error: err.message },
-    });
+    await retryOrFail(job, err);
     throw err;
   }
 }
@@ -198,8 +229,8 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
     // 4. Ask Claude
     const optimized = await optimizePost(post, currentSeoMeta, seoPlugin, otherPosts || [], scoreBefore, rewriteThreshold);
 
-    // 5. Write back to WordPress
-    await writeSeoMeta(creds, job.postId, job.postType, seoPlugin, optimized);
+    // 5. Write back to WordPress (pass already-fetched post to avoid a redundant GET)
+    await writeSeoMeta(creds, job.postId, job.postType, seoPlugin, optimized, post);
 
     // 6. Re-score
     const updatedPost = await wpRequest({ ...creds, method: 'GET', endpoint: `${endpoint}?context=edit` });
@@ -231,9 +262,7 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
 
   } catch (err) {
     logger.error('processJob: error', { jobId: job._id, postId: job.postId, err: err.message });
-    await SeoJob.findByIdAndUpdate(job._id, {
-      $set: { status: 'failed', completedAt: new Date(), error: err.message },
-    });
+    await retryOrFail(job, err);
     throw err;
   }
 }
