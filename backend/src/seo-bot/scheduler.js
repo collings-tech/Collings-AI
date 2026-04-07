@@ -89,7 +89,7 @@ function start() {
   medTask.start();
   lowTask.start();
   tasks = [highTask, medTask, lowTask];
-  logger.info('scheduler: started (high=15m, medium=30m, low=1h)');
+  logger.info('scheduler: started (high=5m, medium=30m, low=1h)');
 }
 
 function stop() {
