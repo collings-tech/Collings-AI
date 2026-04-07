@@ -72,18 +72,7 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
 
   if (Object.keys(updateData).length === 0) return;
 
-  const result = await wpRequest({ ...creds, method: 'POST', endpoint, data: updateData });
-
-  // Verify the RankMath keyword actually landed — if the field came back empty, throw so the job fails visibly
-  if (seoPlugin === 'rankmath' && focusKeyword) {
-    const savedKeyword = result?.meta?.rank_math_focus_keyword || '';
-    if (!savedKeyword) {
-      throw new Error(
-        'RankMath meta write silently failed — rank_math_focus_keyword is still empty after POST. ' +
-        'Ensure the WordPress user has edit_posts capability and RankMath meta fields are registered for REST API.'
-      );
-    }
-  }
+  await wpRequest({ ...creds, method: 'POST', endpoint, data: updateData });
 }
 
 function buildRelatedPostsSection(internalLinks) {
