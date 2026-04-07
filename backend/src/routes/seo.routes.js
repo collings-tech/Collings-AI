@@ -16,6 +16,7 @@ router.post('/logs/:siteId', seo.createLog);
 router.get('/jobs/:siteId', seo.getJobs);
 router.post('/jobs/:siteId', seo.triggerJob);
 router.post('/jobs/:siteId/reset-stale', seo.resetStaleJobs);
+router.post('/jobs/:siteId/clear-completed', seo.clearCompletedJobs);
 router.patch('/jobs/:siteId/:jobId/lock', seo.lockJob);
 router.patch('/jobs/:siteId/:jobId/complete', seo.completeJob);
 router.patch('/jobs/:siteId/:jobId/fail', seo.failJob);

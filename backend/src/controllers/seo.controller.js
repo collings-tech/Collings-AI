@@ -168,6 +168,19 @@ exports.resetStaleJobs = async (req, res, next) => {
   }
 };
 
+// Delete all completed/failed jobs so the next sweep re-queues and re-processes every post
+exports.clearCompletedJobs = async (req, res, next) => {
+  try {
+    const site = await verifySiteOwnership(req.params.siteId, req.user.id);
+    if (!site) return res.status(404).json({ message: 'Site not found' });
+
+    const result = await SeoJob.deleteMany({ siteId: site._id, status: { $in: ['completed', 'failed'] } });
+    res.json({ cleared: result.deletedCount });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.createLog = async (req, res, next) => {
   try {
     const site = await verifySiteOwnership(req.params.siteId, req.user.id);

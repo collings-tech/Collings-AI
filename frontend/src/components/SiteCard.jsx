@@ -193,6 +193,34 @@ function AttentionDropdown({ posts, siteId, onClose }) {
   );
 }
 
+function ReprocessAllButton({ siteId }) {
+  const [state, setState] = useState('idle'); // idle | loading | done
+
+  const handleClick = async (e) => {
+    e.stopPropagation();
+    if (state !== 'idle') return;
+    setState('loading');
+    try {
+      const c = (await import('../api/client')).default;
+      await c.post(`/seo/jobs/${siteId}/clear-completed`);
+      setState('done');
+      setTimeout(() => setState('idle'), 3000);
+    } catch {
+      setState('idle');
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={state !== 'idle'}
+      className="w-full py-1.5 mt-1 border border-brand-700/40 hover:border-brand-500 hover:bg-brand-900/20 disabled:opacity-50 text-brand-400 rounded-lg text-xs font-semibold transition-colors"
+    >
+      {state === 'loading' ? 'Clearing…' : state === 'done' ? 'Done! Re-queuing on next scan…' : 'Re-process All Posts'}
+    </button>
+  );
+}
+
 function SeoBotConfigPanel({ siteId, onClose }) {
   const [config, setConfig] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -273,6 +301,7 @@ function SeoBotConfigPanel({ siteId, onClose }) {
             </button>
             {msg && <span className={`text-xs ${msg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{msg.text}</span>}
           </div>
+          <ReprocessAllButton siteId={siteId} />
         </div>
       )}
     </div>
