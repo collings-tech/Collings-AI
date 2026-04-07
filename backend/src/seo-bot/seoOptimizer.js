@@ -30,6 +30,7 @@ SCORING RULES — your output is scored by an automated system using these exact
 5. rewrittenContent: rewritten HTML ONLY when told to rewrite; otherwise exactly null.
    - When rewriting: focusKeyword must appear in the first paragraph as an exact phrase, at least one <h2>, keyword density 0.5–2.5% (occurrences / total words).
    - Use clean HTML only: <p> <h2> <h3> <ul> <li> <strong>
+   - CRITICAL: rewrittenContent must be a valid JSON string. Escape all double-quotes as \" and all backslashes as \\. Use \n for newlines. No raw newlines or unescaped quotes inside the string.
 
 IMPORTANT: If metaTitle does not contain the exact focusKeyword phrase, the score will DROP. Always verify before returning.`;
 
@@ -88,21 +89,69 @@ Return ONLY the JSON object.`;
 
   const rawResponse = response.content[0].text;
 
-  let parsed;
+  let parsed = null;
+
+  // Attempt 1: clean JSON parse
   try {
     parsed = JSON.parse(rawResponse.trim());
-  } catch {
-    const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Claude did not return valid JSON for SEO optimization');
-    parsed = JSON.parse(jsonMatch[0]);
+  } catch { /* fall through */ }
+
+  // Attempt 2: extract outermost JSON object and parse
+  if (!parsed) {
+    try {
+      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+    } catch { /* fall through */ }
+  }
+
+  // Attempt 3: rewrittenContent may contain unescaped HTML that breaks JSON.
+  // Strip it out, parse the rest of the fields safely via regex.
+  let focusKeyword = '';
+  let metaTitle = '';
+  let metaDescription = '';
+  let internalLinks = [];
+  let rewrittenContent = null;
+
+  if (parsed) {
+    focusKeyword = String(parsed.focusKeyword || '');
+    metaTitle = String(parsed.metaTitle || '');
+    metaDescription = String(parsed.metaDescription || '');
+    internalLinks = Array.isArray(parsed.internalLinks) ? parsed.internalLinks : [];
+    rewrittenContent = parsed.rewrittenContent || null;
+  } else {
+    // Regex fallback — extract scalar fields individually
+    const kwMatch = rawResponse.match(/"focusKeyword"\s*:\s*"([^"]+)"/);
+    const titleMatch = rawResponse.match(/"metaTitle"\s*:\s*"([^"]+)"/);
+    const descMatch = rawResponse.match(/"metaDescription"\s*:\s*"([^"]+)"/);
+    focusKeyword = kwMatch ? kwMatch[1] : '';
+    metaTitle = titleMatch ? titleMatch[1] : '';
+    metaDescription = descMatch ? descMatch[1] : '';
+
+    // Try to parse internalLinks array
+    try {
+      const linksMatch = rawResponse.match(/"internalLinks"\s*:\s*(\[[\s\S]*?\])/);
+      if (linksMatch) internalLinks = JSON.parse(linksMatch[1]);
+    } catch { /* leave as [] */ }
+
+    // Extract rewrittenContent between its key and the closing brace — handles unescaped HTML
+    if (shouldRewrite) {
+      try {
+        const rcMatch = rawResponse.match(/"rewrittenContent"\s*:\s*"([\s\S]*?)"\s*[,}]/);
+        if (rcMatch) rewrittenContent = rcMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      } catch { /* leave as null */ }
+    }
+
+    if (!focusKeyword && !metaTitle) {
+      throw new Error('Claude did not return parseable SEO fields');
+    }
   }
 
   return {
-    focusKeyword: String(parsed.focusKeyword || '').slice(0, 60),
-    metaTitle: String(parsed.metaTitle || '').slice(0, 70),
-    metaDescription: String(parsed.metaDescription || '').slice(0, 200),
-    internalLinks: Array.isArray(parsed.internalLinks) ? parsed.internalLinks.slice(0, 3) : [],
-    rewrittenContent: shouldRewrite && parsed.rewrittenContent ? String(parsed.rewrittenContent) : null,
+    focusKeyword: focusKeyword.slice(0, 60),
+    metaTitle: metaTitle.slice(0, 70),
+    metaDescription: metaDescription.slice(0, 200),
+    internalLinks: internalLinks.slice(0, 3),
+    rewrittenContent: shouldRewrite && rewrittenContent ? String(rewrittenContent) : null,
   };
 }
 
