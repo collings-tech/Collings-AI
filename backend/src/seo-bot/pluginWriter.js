@@ -39,9 +39,11 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
         data: {
           objectID: postId,
           objectType: 'post',
-          rank_math_focus_keyword: focusKeyword,
-          rank_math_title: metaTitle,
-          rank_math_description: metaDescription,
+          meta: {
+            rank_math_focus_keyword: focusKeyword,
+            rank_math_title: metaTitle,
+            rank_math_description: metaDescription,
+          },
         },
       });
     } catch (err) {
