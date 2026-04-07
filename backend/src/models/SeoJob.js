@@ -26,7 +26,7 @@ const seoJobSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'processing', 'completed', 'failed'],
+      enum: ['pending', 'processing', 'completed', 'failed', 'paused'],
       default: 'pending',
       index: true,
     },

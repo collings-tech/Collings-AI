@@ -107,7 +107,7 @@ async function processQueue(priorityFilter) {
   isProcessing = true;
   try {
     // Find all pending jobs at this priority that are due (scheduledAt <= now)
-    const jobs = await SeoJob.find({ priority: priorityFilter, status: 'pending', scheduledAt: { $lte: new Date() } })
+    const jobs = await SeoJob.find({ priority: priorityFilter, status: 'pending', scheduledAt: { $lte: new Date() } }) // paused jobs are excluded
       .sort({ priority: 1, createdAt: 1 })
       .limit(MAX_JOBS_PER_CYCLE);
 
@@ -124,7 +124,22 @@ async function processQueue(priorityFilter) {
 
         let config = await SeoSiteConfig.findOne({ siteId: site._id });
         if (!config) config = await SeoSiteConfig.create({ siteId: site._id, seoPlugin: 'none', scoreThresholdRewrite: SEO_REWRITE_THRESHOLD });
-        if (!config.enabled) continue;
+
+        if (!config.enabled) {
+          // Bot disabled — put all pending jobs for this site on hold (don't process, don't call Claude)
+          await SeoJob.updateMany(
+            { siteId: site._id, status: 'pending' },
+            { $set: { status: 'paused' } }
+          );
+          logger.info('processQueue: bot disabled, paused pending jobs', { siteId });
+          continue;
+        }
+
+        // Bot was re-enabled — resume any previously paused jobs
+        await SeoJob.updateMany(
+          { siteId: site._id, status: 'paused' },
+          { $set: { status: 'pending', scheduledAt: new Date() } }
+        );
 
         let wpAppPassword;
         try { wpAppPassword = decrypt(site.wpAppPassword); }
