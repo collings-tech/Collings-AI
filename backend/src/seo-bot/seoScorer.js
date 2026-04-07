@@ -121,7 +121,16 @@ function simulateScore(currentPost, seoPlugin, optimized) {
       .replace(/\\n/g, '\n')
       .replace(/\\"/g, '"')
       .replace(/\\\\/g, '\\');
-    simulatedPost.content = { rendered: cleanHtml, raw: cleanHtml };
+    // Mirror pluginWriter: always append related posts section after a rewrite
+    let finalHtml = cleanHtml;
+    if (optimized.internalLinks && optimized.internalLinks.length > 0 && !finalHtml.includes('<!-- seo-bot-related-posts -->')) {
+      const valid = optimized.internalLinks.filter((l) => l && l.url && l.anchorText);
+      if (valid.length > 0) {
+        const items = valid.map((l) => `<li><a href="${l.url}">${l.anchorText}</a></li>`).join('\n');
+        finalHtml += `\n<!-- seo-bot-related-posts -->\n<h3>Related Posts</h3>\n<ul>\n${items}\n</ul>\n`;
+      }
+    }
+    simulatedPost.content = { rendered: finalHtml, raw: finalHtml };
   } else if (optimized.internalLinks && optimized.internalLinks.length > 0) {
     // Simulate the related posts section that writeSeoMeta appends
     const currentContent = typeof currentPost.content === 'object'

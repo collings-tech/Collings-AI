@@ -31,19 +31,23 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
   if (seoPlugin === 'rankmath') {
     // RankMath meta fields are NOT reliably writable via the standard WP REST API.
     // Use RankMath's own REST endpoint instead.
-    await wpRequest({
-      ...creds,
-      method: 'POST',
-      endpoint: null,
-      _rawUrl: `${creds.siteUrl}/wp-json/rankmath/v1/updateMeta`,
-      data: {
-        objectID: postId,
-        objectType: 'post',
-        rank_math_focus_keyword: focusKeyword,
-        rank_math_title: metaTitle,
-        rank_math_description: metaDescription,
-      },
-    });
+    try {
+      await wpRequest({
+        ...creds,
+        method: 'POST',
+        _rawUrl: `${creds.siteUrl}/wp-json/rankmath/v1/updateMeta`,
+        data: {
+          objectID: postId,
+          objectType: 'post',
+          rank_math_focus_keyword: focusKeyword,
+          rank_math_title: metaTitle,
+          rank_math_description: metaDescription,
+        },
+      });
+    } catch (err) {
+      // Surface this clearly — if the endpoint doesn't exist, scores will never improve
+      throw new Error(`RankMath updateMeta failed for post ${postId}: ${err.response?.status} ${err.response?.data?.message || err.message}`);
+    }
   } else if (seoPlugin === 'yoast') {
     updateData.meta = {
       _yoast_wpseo_focuskw: focusKeyword,
@@ -60,7 +64,13 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
     const preservedStatus = postType === 'page' ? 'publish' : (originalStatus === 'publish' ? 'publish' : 'draft');
 
     if (rewrittenContent) {
-      updateData.content = rewrittenContent;
+      // Always append related posts section after a rewrite so we don't lose link points
+      let finalContent = rewrittenContent;
+      if (internalLinks && internalLinks.length > 0 && !finalContent.includes('<!-- seo-bot-related-posts -->')) {
+        const relatedSection = buildRelatedPostsSection(internalLinks);
+        if (relatedSection) finalContent += relatedSection;
+      }
+      updateData.content = finalContent;
       updateData.status = preservedStatus;
     } else if (currentPost) {
       const currentContent = typeof currentPost.content === 'object'
