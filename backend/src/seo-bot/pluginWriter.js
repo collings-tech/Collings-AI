@@ -22,6 +22,29 @@ async function wpRequest({ siteUrl, wpUsername, wpAppPassword, method, endpoint,
   return response.data;
 }
 
+// Write RankMath meta via its own REST API endpoint
+async function writeRankMathMeta(creds, postId, { focusKeyword, metaTitle, metaDescription }) {
+  const url = `${creds.siteUrl}/wp-json/rankmath/v1/updateMeta`;
+  await axios({
+    method: 'POST',
+    url,
+    data: {
+      objectID: postId,
+      objectType: 'post',
+      meta: {
+        focusKeyword,
+        title: metaTitle,
+        description: metaDescription,
+      },
+    },
+    headers: {
+      Authorization: buildAuthHeader(creds.wpUsername, creds.wpAppPassword),
+      'Content-Type': 'application/json',
+    },
+    timeout: 15000,
+  });
+}
+
 // currentPost is the already-fetched post object (passed from scheduler to avoid a duplicate GET)
 async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, currentPost) {
   const { focusKeyword, metaTitle, metaDescription, internalLinks, rewrittenContent } = seoData;
@@ -29,11 +52,8 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
   const updateData = {};
 
   if (seoPlugin === 'rankmath') {
-    updateData.meta = {
-      rank_math_focus_keyword: focusKeyword,
-      rank_math_title: metaTitle,
-      rank_math_description: metaDescription,
-    };
+    // RankMath exposes its own REST endpoint — the standard WP meta field is ignored by RankMath
+    await writeRankMathMeta(creds, postId, { focusKeyword, metaTitle, metaDescription });
   } else if (seoPlugin === 'yoast') {
     updateData.meta = {
       _yoast_wpseo_focuskw: focusKeyword,
@@ -67,9 +87,9 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
     }
   }
 
-  if (Object.keys(updateData).length === 0) return null;
-
-  return wpRequest({ ...creds, method: 'POST', endpoint, data: updateData });
+  if (Object.keys(updateData).length > 0) {
+    await wpRequest({ ...creds, method: 'POST', endpoint, data: updateData });
+  }
 }
 
 function buildRelatedPostsSection(internalLinks) {
