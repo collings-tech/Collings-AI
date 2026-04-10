@@ -57,7 +57,20 @@ function triggeredByLabel(t) {
     case 'nightly_sweep': return 'Nightly sweep';
     case 'manual': return 'Manual';
     case 'low_score': return 'Low score';
+    case 'quick_sweep':
+    case '5min_sweep': return 'Quick sweep';
+    case 'image_check': return 'Image check';
     default: return t || '—';
+  }
+}
+
+function jobActionLabel(result) {
+  if (!result) return null;
+  switch (result.action) {
+    case 'seo_optimization': return { label: 'SEO Optimization', cls: 'bg-brand-900/30 text-brand-300 border-brand-800/40' };
+    case 'alt_text': return { label: 'Alt Text Added', cls: 'bg-purple-900/30 text-purple-300 border-purple-800/40' };
+    case 'skipped': return { label: 'Skipped', cls: 'bg-gray-700/50 text-gray-400 border-gray-600/50' };
+    default: return null;
   }
 }
 
@@ -229,6 +242,8 @@ function LogEntry({ log }) {
 
 function JobEntry({ job }) {
   const [expanded, setExpanded] = useState(false);
+  const actionInfo = jobActionLabel(job.result);
+  const r = job.result;
 
   return (
     <div className="border-b border-gray-700/40 last:border-0">
@@ -265,12 +280,17 @@ function JobEntry({ job }) {
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${jobStatusBadge(job.status)}`}>
                 Job {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
               </span>
+              {actionInfo && (
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${actionInfo.cls}`}>
+                  {actionInfo.label}
+                </span>
+              )}
               <span className="text-gray-500 text-xs">
                 {timeAgo(job.completedAt || job.startedAt || job.scheduledAt)}
               </span>
             </div>
             <p className="text-white text-sm font-medium mt-1">
-              {job.postType.charAt(0).toUpperCase() + job.postType.slice(1)} #{job.postId}
+              {r?.postTitle || `${job.postType.charAt(0).toUpperCase() + job.postType.slice(1)} #${job.postId}`}
             </p>
             <div className="flex items-center gap-3 mt-1.5 flex-wrap">
               <span className="text-xs text-gray-500">
@@ -281,6 +301,19 @@ function JobEntry({ job }) {
                   {job.priority === 1 ? 'High' : job.priority === 2 ? 'Medium' : 'Low'}
                 </span>
               </span>
+              {r?.action === 'seo_optimization' && r.scoreBefore != null && r.scoreAfter != null && (
+                <span className="text-xs text-gray-500">
+                  Score: <span className={scoreColor(r.scoreBefore)}>{r.scoreBefore}</span>
+                  <span className="text-gray-600 mx-1">→</span>
+                  <span className={scoreColor(r.scoreAfter)}>{r.scoreAfter}</span>
+                  <span className={`ml-1 px-1 rounded font-bold text-xs ${scoreDiff(r.scoreBefore, r.scoreAfter).cls}`}>
+                    {scoreDiff(r.scoreBefore, r.scoreAfter).label}
+                  </span>
+                </span>
+              )}
+              {r?.action === 'skipped' && r.skippedReason && (
+                <span className="text-xs text-gray-500 italic">{r.skippedReason}</span>
+              )}
               {job.error && <span className="text-xs text-red-400 truncate max-w-xs">{job.error}</span>}
             </div>
           </div>
@@ -296,7 +329,7 @@ function JobEntry({ job }) {
 
       {expanded && (
         <div className="px-5 pb-4 ml-11">
-          <div className="bg-gray-900/60 border border-gray-700/50 rounded-xl p-4 space-y-2">
+          <div className="bg-gray-900/60 border border-gray-700/50 rounded-xl p-4 space-y-3">
             <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Job Details</p>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
               <div><span className="text-gray-500">Post ID</span><p className="text-gray-200 font-mono">{job.postId}</p></div>
@@ -311,8 +344,70 @@ function JobEntry({ job }) {
               {job.startedAt && <div><span className="text-gray-500">Started</span><p className="text-gray-400">{formatDate(job.startedAt)}</p></div>}
               {job.completedAt && <div><span className="text-gray-500">Completed</span><p className="text-gray-400">{formatDate(job.completedAt)}</p></div>}
             </div>
+
+            {/* Result: SEO Optimization changes */}
+            {r?.action === 'seo_optimization' && r.changes && (
+              <div className="pt-2 border-t border-gray-700/50 space-y-2">
+                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Changes Applied</p>
+                {r.scoreBefore != null && r.scoreAfter != null && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-500">Score</span>
+                    <span className={`font-bold ${scoreColor(r.scoreBefore)}`}>{r.scoreBefore}</span>
+                    <span className="text-gray-600">→</span>
+                    <span className={`font-bold ${scoreColor(r.scoreAfter)}`}>{r.scoreAfter}</span>
+                    <span className={`px-1.5 py-0.5 rounded font-bold ${scoreDiff(r.scoreBefore, r.scoreAfter).cls}`}>
+                      {scoreDiff(r.scoreBefore, r.scoreAfter).label}
+                    </span>
+                  </div>
+                )}
+                {r.changes.focusKeyword?.after && (
+                  <div>
+                    <p className="text-xs font-semibold text-brand-400 uppercase tracking-wide mb-0.5">Focus Keyword</p>
+                    {r.changes.focusKeyword.before && <p className="text-xs text-gray-500 line-through">{r.changes.focusKeyword.before}</p>}
+                    <p className="text-xs text-gray-200">{r.changes.focusKeyword.after}</p>
+                  </div>
+                )}
+                {r.changes.metaTitle?.after && (
+                  <div>
+                    <p className="text-xs font-semibold text-brand-400 uppercase tracking-wide mb-0.5">Meta Title</p>
+                    {r.changes.metaTitle.before && <p className="text-xs text-gray-500 line-through leading-relaxed">{r.changes.metaTitle.before}</p>}
+                    <p className="text-xs text-gray-200 leading-relaxed">{r.changes.metaTitle.after}</p>
+                  </div>
+                )}
+                {r.changes.metaDescription?.after && (
+                  <div>
+                    <p className="text-xs font-semibold text-brand-400 uppercase tracking-wide mb-0.5">Meta Description</p>
+                    {r.changes.metaDescription.before && <p className="text-xs text-gray-500 line-through leading-relaxed">{r.changes.metaDescription.before}</p>}
+                    <p className="text-xs text-gray-200 leading-relaxed">{r.changes.metaDescription.after}</p>
+                  </div>
+                )}
+                {r.changes.internalLinksAdded > 0 && (
+                  <p className="text-xs text-brand-300">{r.changes.internalLinksAdded} internal link{r.changes.internalLinksAdded > 1 ? 's' : ''} added</p>
+                )}
+                {r.changes.contentRewritten && (
+                  <p className="text-xs text-amber-300">Full content rewrite applied</p>
+                )}
+              </div>
+            )}
+
+            {/* Result: Alt text */}
+            {r?.action === 'alt_text' && r.altText && (
+              <div className="pt-2 border-t border-gray-700/50">
+                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Alt Text Written</p>
+                <p className="text-xs text-gray-200 leading-relaxed">{r.altText}</p>
+              </div>
+            )}
+
+            {/* Result: Skipped */}
+            {r?.action === 'skipped' && (
+              <div className="pt-2 border-t border-gray-700/50">
+                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Skipped</p>
+                <p className="text-xs text-gray-400">{r.skippedReason}</p>
+              </div>
+            )}
+
             {job.error && (
-              <div className="mt-2 pt-2 border-t border-gray-700/50">
+              <div className="pt-2 border-t border-gray-700/50">
                 <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Error</p>
                 <p className="text-xs text-red-300 leading-relaxed">{job.error}</p>
               </div>

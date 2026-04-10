@@ -224,8 +224,10 @@ async function quickSweepSite(site) {
   // All site IDs for this WordPress URL (multiple users may share it)
   const coSiteIds = (await Site.find({ siteUrl: site.siteUrl }, '_id')).map((s) => s._id);
 
+  const SWEEP_JOB_LIMIT = 10;
   let contentQueued = 0;
   for (const item of [...posts, ...pages]) {
+    if (contentQueued >= SWEEP_JOB_LIMIT) break;
     const { score } = scorePost(item, seoPlugin);
     if (score >= 65) continue;
 
@@ -243,7 +245,7 @@ async function quickSweepSite(site) {
     } else {
       await SeoJob.create({
         siteId: site._id, postId: item.id, postType,
-        priority: 1, triggeredBy: '5min_sweep', scheduledAt: new Date(),
+        priority: 1, triggeredBy: 'quick_sweep', scheduledAt: new Date(),
       });
       contentQueued++;
     }
@@ -254,6 +256,7 @@ async function quickSweepSite(site) {
   try {
     const media = await fetchAllMedia(creds);
     for (const item of media) {
+      if (contentQueued + imageQueued >= SWEEP_JOB_LIMIT) break;
       if (item.alt_text && item.alt_text.trim() !== '') continue;
 
       const existing = await SeoJob.findOne({

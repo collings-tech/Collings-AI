@@ -32,7 +32,7 @@ const seoJobSchema = new mongoose.Schema(
     },
     triggeredBy: {
       type: String,
-      enum: ['new_post', 'nightly_sweep', 'manual', 'low_score', '5min_sweep', 'image_check'],
+      enum: ['new_post', 'nightly_sweep', 'manual', 'low_score', 'quick_sweep', 'image_check'],
       required: true,
     },
     scheduledAt: {
@@ -43,6 +43,24 @@ const seoJobSchema = new mongoose.Schema(
     completedAt: { type: Date, default: null },
     error: { type: String, default: null },
     retryCount: { type: Number, default: 0 },
+    result: {
+      type: {
+        action: { type: String }, // 'seo_optimization' | 'alt_text' | 'skipped'
+        skippedReason: { type: String, default: null },
+        scoreBefore: { type: Number, default: null },
+        scoreAfter: { type: Number, default: null },
+        postTitle: { type: String, default: null },
+        altText: { type: String, default: null },
+        changes: {
+          focusKeyword: { before: String, after: String },
+          metaTitle: { before: String, after: String },
+          metaDescription: { before: String, after: String },
+          internalLinksAdded: { type: Number, default: 0 },
+          contentRewritten: { type: Boolean, default: false },
+        },
+      },
+      default: null,
+    },
   },
   { timestamps: true }
 );

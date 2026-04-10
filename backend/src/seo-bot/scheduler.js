@@ -247,14 +247,24 @@ async function processImageJob(job, { creds }) {
     // Already has alt text (may have been set manually since job was queued)
     if (media.alt_text && media.alt_text.trim() !== '') {
       logger.info('processImageJob: alt text already present, skipping', { mediaId: job.postId });
-      await SeoJob.findByIdAndUpdate(job._id, { $set: { status: 'completed', completedAt: new Date() } });
+      await SeoJob.findByIdAndUpdate(job._id, {
+        $set: {
+          status: 'completed', completedAt: new Date(),
+          result: { action: 'skipped', skippedReason: 'Alt text already present' },
+        },
+      });
       return;
     }
 
     const altText = await generateImageAltText(media);
     await fixImageAltText(creds, job.postId, altText);
 
-    await SeoJob.findByIdAndUpdate(job._id, { $set: { status: 'completed', completedAt: new Date() } });
+    await SeoJob.findByIdAndUpdate(job._id, {
+      $set: {
+        status: 'completed', completedAt: new Date(),
+        result: { action: 'alt_text', altText },
+      },
+    });
     logger.info('processImageJob: complete', { jobId: job._id, mediaId: job.postId, altText });
 
   } catch (err) {
@@ -296,7 +306,12 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
 
     if (scoreBefore >= 65 && job.priority > 1) {
       logger.info('processJob: already Good, skipping', { postId: job.postId });
-      await SeoJob.findByIdAndUpdate(job._id, { $set: { status: 'completed', completedAt: new Date() } });
+      await SeoJob.findByIdAndUpdate(job._id, {
+        $set: {
+          status: 'completed', completedAt: new Date(),
+          result: { action: 'skipped', skippedReason: `Score already good (${scoreBefore})` },
+        },
+      });
       return;
     }
 
@@ -321,7 +336,12 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
       logger.warn('processJob: optimized values would not improve score — skipping write', {
         postId: job.postId, scoreBefore, simulatedScore,
       });
-      await SeoJob.findByIdAndUpdate(job._id, { $set: { status: 'completed', completedAt: new Date() } });
+      await SeoJob.findByIdAndUpdate(job._id, {
+        $set: {
+          status: 'completed', completedAt: new Date(),
+          result: { action: 'skipped', skippedReason: 'Optimized values would not improve score' },
+        },
+      });
       return;
     }
 
@@ -355,7 +375,18 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
     await Promise.all(coSites.map((s) => SeoLog.create({ ...logEntry, siteId: s._id })));
 
     // 8. Mark complete
-    await SeoJob.findByIdAndUpdate(job._id, { $set: { status: 'completed', completedAt: new Date() } });
+    await SeoJob.findByIdAndUpdate(job._id, {
+      $set: {
+        status: 'completed', completedAt: new Date(),
+        result: {
+          action: 'seo_optimization',
+          postTitle,
+          scoreBefore,
+          scoreAfter,
+          changes: logEntry.changes,
+        },
+      },
+    });
     logger.info('processJob: complete', { jobId: job._id, postId: job.postId, scoreBefore, scoreAfter });
 
   } catch (err) {

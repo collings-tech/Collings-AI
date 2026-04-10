@@ -51,7 +51,7 @@ Block 1 — save the post/page content:
 Block 2 — write SEO metadata using the correct method for ${detectedSeoPlugin}:
 ${detectedSeoPlugin === 'rankmath' ? `For Rank Math, use the Rank Math API Manager plugin endpoint (flat form-encoded params, NOT nested meta object):
 \`\`\`json
-{ "wpAction": { "method": "POST", "endpoint": "/rank-math-api/v2/update-meta", "data": { "post_id": 123, "rank_math_focus_keyword": "focus keyword", "rank_math_title": "SEO Title 50-60 chars", "rank_math_description": "Meta description 140-160 chars" } } }
+{ "wpAction": { "method": "POST", "endpoint": "/rank-math-api/v1/update-meta", "data": { "post_id": 123, "rank_math_focus_keyword": "focus keyword", "rank_math_title": "SEO Title 50-60 chars", "rank_math_description": "Meta description 140-160 chars" } } }
 \`\`\`
 IMPORTANT: This endpoint only works for posts and products — NOT pages. For pages, omit Block 2.` : detectedSeoPlugin === 'yoast' ? `For Yoast, include meta in the post update:
 \`\`\`json

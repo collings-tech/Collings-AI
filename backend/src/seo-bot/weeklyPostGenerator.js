@@ -317,7 +317,7 @@ async function flagStalePostsForRefresh(site, creds, seoPlugin) {
     } else {
       await SeoJob.create({
         siteId: site._id, postId: post.id, postType: 'post',
-        priority: 1, triggeredBy: '5min_sweep', scheduledAt: new Date(),
+        priority: 1, triggeredBy: 'quick_sweep', scheduledAt: new Date(),
       });
       flagged++;
     }

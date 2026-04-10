@@ -42,7 +42,7 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
       try {
         await axios({
           method: 'POST',
-          url: `${creds.siteUrl}/wp-json/rank-math-api/v2/update-meta`,
+          url: `${creds.siteUrl}/wp-json/rank-math-api/v1/update-meta`,
           data: formParams.toString(),
           headers: {
             Authorization: buildAuthHeader(creds.wpUsername, creds.wpAppPassword),
