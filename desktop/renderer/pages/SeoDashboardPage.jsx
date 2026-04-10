@@ -15,6 +15,7 @@ const DATE_RANGES = [
 
 export default function SeoDashboardPage({ onBack }) {
   const [activeView, setActiveView] = useState('overview');
+  const [siteTab, setSiteTab] = useState('analytics');
   const [selectedSite, setSelectedSite] = useState(null);
   const [dateRange, setDateRange] = useState(30);
   const [overview, setOverview] = useState([]);
@@ -24,6 +25,12 @@ export default function SeoDashboardPage({ onBack }) {
   const [topImproved, setTopImproved] = useState([]);
   const [attention, setAttention] = useState([]);
   const [feedLogs, setFeedLogs] = useState([]);
+
+  // Settings tab state
+  const [config, setConfig] = useState(null);
+  const [sweepInterval, setSweepInterval] = useState(5);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configMsg, setConfigMsg] = useState(null);
 
   const [loading, setLoading] = useState({
     overview: false,
@@ -91,9 +98,34 @@ export default function SeoDashboardPage({ onBack }) {
     }
   }, [selectedSite, dateRange, loadSiteData]);
 
+  const loadConfig = useCallback(async (siteId) => {
+    const res = await invoke('seo:get-config', { siteId });
+    if (!res.error) {
+      setConfig(res.config);
+      setSweepInterval(res.config.quickSweepIntervalMinutes ?? 5);
+    }
+  }, []);
+
+  const handleSaveConfig = async () => {
+    if (!selectedSite) return;
+    setConfigSaving(true);
+    setConfigMsg(null);
+    const res = await invoke('seo:update-config', { siteId: selectedSite.siteId, quickSweepIntervalMinutes: sweepInterval });
+    setConfigSaving(false);
+    if (res.error) {
+      setConfigMsg({ type: 'error', text: res.error });
+    } else {
+      setConfig(res.config);
+      setConfigMsg({ type: 'success', text: 'Settings saved.' });
+      setTimeout(() => setConfigMsg(null), 3000);
+    }
+  };
+
   const handleSelectSite = (site) => {
     setSelectedSite(site);
+    setSiteTab('analytics');
     setActiveView('site-detail');
+    loadConfig(site.siteId);
   };
 
   const handleRefresh = () => {
@@ -195,11 +227,86 @@ export default function SeoDashboardPage({ onBack }) {
         ) : (
           /* Per-site Detail */
           <div className="flex flex-col gap-6">
-            <div>
-              <h2 className="text-xl font-bold text-white">{selectedSite?.siteLabel}</h2>
-              <p className="text-gray-500 text-sm">{selectedSite?.siteUrl}</p>
+            <div className="flex items-end justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-white">{selectedSite?.siteLabel}</h2>
+                <p className="text-gray-500 text-sm">{selectedSite?.siteUrl}</p>
+              </div>
+              {/* Tab bar */}
+              <div className="flex bg-gray-800 rounded-xl border border-gray-700 p-0.5 gap-0.5">
+                {['analytics', 'settings'].map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setSiteTab(tab)}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
+                      siteTab === tab ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
             </div>
 
+            {siteTab === 'settings' ? (
+              /* ── Settings panel ── */
+              <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 max-w-lg">
+                <h3 className="text-white font-semibold text-sm mb-1">Quick Sweep Interval</h3>
+                <p className="text-gray-400 text-xs mb-5">
+                  How often the bot scans this site for posts that need SEO work. Min 5 min · Max 3 hrs.
+                </p>
+
+                <div className="flex items-center gap-4 mb-2">
+                  <input
+                    type="range"
+                    min={5}
+                    max={180}
+                    step={5}
+                    value={sweepInterval}
+                    onChange={(e) => setSweepInterval(Number(e.target.value))}
+                    className="flex-1 accent-brand-500"
+                  />
+                  <div className="flex items-center gap-1 w-28">
+                    <input
+                      type="number"
+                      min={5}
+                      max={180}
+                      value={sweepInterval}
+                      onChange={(e) => {
+                        const v = Math.max(5, Math.min(180, Number(e.target.value)));
+                        setSweepInterval(v);
+                      }}
+                      className="w-16 bg-gray-900 border border-gray-600 rounded-lg px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-brand-500"
+                    />
+                    <span className="text-gray-400 text-xs">min</span>
+                  </div>
+                </div>
+
+                <p className="text-gray-500 text-xs mb-5">
+                  {sweepInterval < 60
+                    ? `Every ${sweepInterval} minutes`
+                    : sweepInterval === 60
+                    ? 'Every hour'
+                    : `Every ${(sweepInterval / 60).toFixed(1).replace('.0', '')} hours`}
+                </p>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleSaveConfig}
+                    disabled={configSaving}
+                    className="px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
+                  >
+                    {configSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  {configMsg && (
+                    <span className={`text-xs ${configMsg.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+                      {configMsg.text}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
             {/* Top row: line chart + donut */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
@@ -223,6 +330,8 @@ export default function SeoDashboardPage({ onBack }) {
 
             {/* Activity feed */}
             <SeoActivityFeed logs={feedLogs} loading={loading.feed} />
+              </>
+            )}
           </div>
         )}
       </main>

@@ -1,0 +1,1842 @@
+{
+  "info": {
+    "_postman_id": "7c5e4e6c-0417-415e-83fc-53142d7e6d86",
+    "name": "Wordpress",
+    "description": "The WordPress REST API provides API endpoints for WordPress data types that allow developers to interact with sites remotely by sending and receiving JSON.nn# Why use the WordPress REST APInThe WordPress REST API makes it easier than ever to use WordPress in new and exciting ways, such as creating Single Page Applications on top of WordPress. You could create a plugin to provide an entirely new admin experiences for WordPress, or create a brand new interactive front-end experience.nn# Key ConceptsnTo get started with using the WordPress REST API we will break down some of the key concepts and terms associated with the API:n* Routes/Endpointsn* Requestsn* Responsesn* Scheman* Controller ClassesnnEach of these concepts play a crucial role in using and understanding the WordPress REST API. Letu2019s briefly break them down so that we can later explore each in greater depth.nn# Routes & EndpointsnA route, in the context of the WordPress REST API, is a URI which can be mapped to different HTT\n\nContact Support:\n Name: No Contact\n Email: email@example.com",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "53904416",
+    "_collection_link": "https://go.postman.co/collection/35240-7c5e4e6c-0417-415e-83fc-53142d7e6d86?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "{{site}}",
+      "item": [
+        {
+          "name": "wp-json",
+          "item": [
+            {
+              "name": "wp/v2",
+              "item": [
+                {
+                  "name": "media",
+                  "item": [
+                    {
+                      "name": "List Media ",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/media",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "media"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```page```|Current page of the collection.<br/>Default: **1**n|```per_page```|Maximum number of items to be returned in result set.<br/>Default: **10**n|```search```|Limit results to those matching a string.n|```after```|Limit response to posts published after a given ISO8601 compliant date.n|```author```|Limit result set to posts as"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Retrieve a Media item",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/media/:mediaId",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "media",
+                            ":mediaId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            },
+                            {
+                              "key": "mediaId"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:--|:--n|```id```|Unique identifier for the object.n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Delete a Media item",
+                      "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/media/{{mediaId}}?force=1",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "media",
+                            "{{mediaId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "force",
+                              "value": "1"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "force",
+                              "value": "",
+                              "type": "string",
+                              "description": {
+                                "content": "",
+                                "type": "text/plain"
+                              }
+                            }
+                          ]
+                        },
+                        "description": "|||n|:--|:--n|```id```|Unique identifier for the object.n|```force```|Whether to bypass trash and force deletion."
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Update a Media item",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/media/{{mediaId}}?caption={{caption}}",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "media",
+                            "{{mediaId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "caption",
+                              "value": "{{caption}}"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:--|:--n|```id```|Unique identifier for the object.n|```date```|The date the object was published, in the site's timezone.n|```date_gmt```|The date the object was published, as GMT.n|```slug```|An alphanumeric identifier for the object unique to its type.n|```status```|A named status for the object.<br/>One of: **publish, future, draft, pending, private**n|```title```|The title for the object.n|```author```|The ID for the author of the object.n|```comment_status```|Whether or not comments a"
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "blocks",
+                  "item": [
+                    {
+                      "name": "{{block Id}}",
+                      "item": [
+                        {
+                          "name": "Retrieve a wp_block",
+                          "request": {
+                            "method": "GET",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/:site/wp-json/wp/v2/blocks/:blockId",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                ":site",
+                                "wp-json",
+                                "wp",
+                                "v2",
+                                "blocks",
+                                ":blockId"
+                              ],
+                              "variable": [
+                                {
+                                  "key": "site"
+                                },
+                                {
+                                  "key": "blockId"
+                                }
+                              ]
+                            },
+                            "description": "|||n|:---|:---n|```id```|Unique identifier for the object.n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```password```|The password for the post if it is password protected."
+                          },
+                          "response": []
+                        },
+                        {
+                          "name": "Retrieve a wp_block-revision",
+                          "request": {
+                            "method": "GET",
+                            "header": [],
+                            "url": {
+                              "raw": "{{baseUrl}}/:site/wp-json/wp/v2/blocks/:blockId/autosaves?parent={{postId}}",
+                              "host": [
+                                "{{baseUrl}}"
+                              ],
+                              "path": [
+                                ":site",
+                                "wp-json",
+                                "wp",
+                                "v2",
+                                "blocks",
+                                ":blockId",
+                                "autosaves"
+                              ],
+                              "query": [
+                                {
+                                  "key": "parent",
+                                  "value": "{{postId}}"
+                                }
+                              ],
+                              "variable": [
+                                {
+                                  "key": "parent",
+                                  "value": "",
+                                  "type": "string",
+                                  "description": {
+                                    "content": "",
+                                    "type": "text/plain"
+                                  }
+                                }
+                              ]
+                            },
+                            "description": "|||n|:---|:---n|```parent```|The ID for the parent of the object.<br/>Request:**1**n|```context```|Scope under which the request is made; |```determines```|fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**"
+                          },
+                          "response": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "List wp_blocks",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/blocks",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "blocks"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "| | | n| :--- | :---n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```page```|Current page of the collection.<br/>Default: **1**n|```per_page```|Maximum number of items to be returned in result set.<br/>Default: **10**n|```search```|Limit results to those matching a string.n|```after```|Limit response to posts published after a given ISO8601 compliant date.n|```before```|Limit response to post"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Retrieve a wp_block-revision with parent",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/blocks/:parentId/autosaves/:blockId",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "blocks",
+                            ":parentId",
+                            "autosaves",
+                            ":blockId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            },
+                            {
+                              "key": "parentId"
+                            },
+                            {
+                              "key": "blockId"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```parent```|The ID for the parent of the object.n|```id```|The ID for the object.n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Delete a wp_block",
+                      "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/blocks/{{blockId}}?force=1",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "blocks",
+                            "{{blockId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "force",
+                              "value": "1"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "force",
+                              "value": "",
+                              "type": "string",
+                              "description": {
+                                "content": "",
+                                "type": "text/plain"
+                              }
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the object.n|```force```|Whether to bypass trash and force deletion."
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Updating a wp_block",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/blocks/{{blockId}}?content={{content}}&title={{title}}",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "blocks",
+                            "{{blockId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "content",
+                              "value": "{{content}}"
+                            },
+                            {
+                              "key": "title",
+                              "value": "{{title}}"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the object.n|```date```|The date the object was published, in the site's timezone.n|```date_gmt```|The date the object was published, as GMT.n|```slug```|An alphanumeric identifier for the object unique to its type.n|```status```|A named status for the object.<br/>One of: **publish, future, draft, pending, private**n|```password```|A password to protect access to the content and excerpt.n|```title```|The title for the object.n|```content```|The cont"
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "taxonomies",
+                  "item": [
+                    {
+                      "name": "Retrieve a Taxonomy",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/taxonomies",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "taxonomies"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```type```|Limit results to taxonomies associated with a specific post type.n"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Retrieve a Taxonomy",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/taxonomies/:taxonomy",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "taxonomies",
+                            ":taxonomy"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            },
+                            {
+                              "key": "taxonomy"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:--|:--n|```taxonomy```|An alphanumeric identifier for the taxonomy.n|```context```|Scope under which the request is made; determines fields present in response.<bvr/>Default: **view**<br/>One of: **view, embed, edit**"
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "users",
+                  "item": [
+                    {
+                      "name": "Create a User",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/users",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "users"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```username```|Login name for the user.<br/>Required: **1**n|```name```|Display name for the user.n|```first_name```|First name for the user.n|```last_name```|Last name for the user.n|```email```|The email address for the user.<br/>Required: **1**n|```url```|URL of the user.n|```description```|Description of the user.n|```locale```|Locale for the user.<br/>One of: **en_US**n|```nickname```|The nickname for the user.n|```slug```|An alphanumeric identifier for the user.n|```roles``"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Update Me",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/users/me",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "users",
+                            "me"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```username```|Login name for the user.n|```name```|Display name for the user.n|```first_name```|First name for the user.n|```last_name```|Last name for the user.n|```email```|The email address for the user.n|```url```|URL of the user.n|```description```|Description of the user.n|```locale```|Locale for the user.<br/>One of: **en_US**n|```nickname```|The nickname for the user.n|```slug```|An alphanumeric identifier for the user.n|```roles```|Roles assigned to the user.n|```passwo"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Update a User",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/users/:userId",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "users",
+                            ":userId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            },
+                            {
+                              "key": "userId"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the user.n|```username```|Login name for the user.n|```name```|Display name for the user.n|```first_name```|First name for the user.n|```last_name```|Last name for the user.n|```email```|The email address for the user.n|```url```|URL of the user.n|```description```|Description of the user.n|```locale```|Locale for the user.<br/>One of: **en_US**n|```nickname```|The nickname for the user.n|```slug```|An alphanumeric identifier for the user.n|```roles"
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "statuses",
+                  "item": [
+                    {
+                      "name": "Retrieve a Status",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/statuses",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "statuses"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, ed**"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Retrieve a Status",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/statuses/:statusId",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "statuses",
+                            ":statusId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            },
+                            {
+                              "key": "statusId"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```status```|An alphanumeric identifier for the status.n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**"
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "categories",
+                  "item": [
+                    {
+                      "name": "List Categories",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/categories",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "categories"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:--|:--n|```context```|Scope under which the request is made;determines fields present in response.n<br/>Default: **view**<br/>One of: **view, embed, edit**n|```page```|Current page of the collection.<br/>Default: **1**n|```per_page```|Maximum number of items to be returned in result set.<br/>Default: **10**n|```search```|Limit results to those matching a string.n|```exclude```|Ensure result set excludes specific IDs.n|```include```|Limit result set to specific IDs.n|```order```|Order sort "
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Update a Category",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/categories/{{categoriesId}}?name={{categoriesName}}",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "categories",
+                            "{{categoriesId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "name",
+                              "value": "{{categoriesName}}"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "name",
+                              "value": "",
+                              "type": "string",
+                              "description": {
+                                "content": "",
+                                "type": "text/plain"
+                              }
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the term.n|```description```|HTML description of the term.n|```name```|HTML title for the term.n|```slug```|An alphanumeric identifier for the term unique to its type.n|```parent```|The parent term ID.n|```meta```|Meta fields."
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Delete a Category",
+                      "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/categories/{{categoriesId}}?force=1",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "categories",
+                            "{{categoriesId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "force",
+                              "value": "1"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "force",
+                              "value": "",
+                              "type": "string",
+                              "description": {
+                                "content": "",
+                                "type": "text/plain"
+                              }
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the term.n|```force```|Required to be true, as terms do not support trashing.n"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Retrieve a Category ",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/categories/:categoriesId",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "categories",
+                            ":categoriesId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            },
+                            {
+                              "key": "categoriesId"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the term.n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**"
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "comments",
+                  "item": [
+                    {
+                      "name": "List Comments",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/comments",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "comments"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```page```|Current page of the collection.<br/>Default: **1**n|```per_page```|Maximum number of items to be returned in result set.<br/>Default: **10**n|```search```|Limit results to those matching a string.n|```after```|Limit response to comments published after a given ISO8601 compliant date.n|```author```|Limit result set to comme"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Retrieve a Comment",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/comments/:commentId",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "comments",
+                            ":commentId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            },
+                            {
+                              "key": "commentId"
+                            }
+                          ]
+                        },
+                        "description": "**Authentication Required**nnn|||n|:---|:---n|```id```|Unique identifier for the object.n|```context```|Scope under which the request is made; determines fields present inresponse.<br/>Default:**view**<br/>One of: **view, embed, edit**n|```password```|The password for the parent post of the comment (if the post is password protected)."
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "posts",
+                  "item": [
+                    {
+                      "name": "List Posts",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/posts",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "posts"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "## List Postsn| | |n| :-- | :--n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```page``` | Current page of collection.<br/>Default:**1**n|```per_page```|Maximum number of items to be returned in result set.<br/>Default: **10**n|```search```|Limit results to those matching a string.n|```after```|Limit response to posts published after a given ISO8601 compliant date.n|```author```|Limit result s"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Update a Post",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/posts/{{postId}}?content={{content}}&title={{title}}&excerpt={{excerpt}}",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "posts",
+                            "{{postId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "content",
+                              "value": "{{content}}"
+                            },
+                            {
+                              "key": "title",
+                              "value": "{{title}}"
+                            },
+                            {
+                              "key": "excerpt",
+                              "value": "{{excerpt}}"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the object.n|```date```|The date the object was published, in the site's timezone.n|```date_gmt```|The date the object was published, as GMT.n|```slug```|An alphanumeric identifier for the object unique to its type.n|```status```|A named status for the object.<br/>One of: **publish, future, draft, pending, private**n|```password```|A password to protect access to the content and excerpt.n|```title```|The title for the object.n|```content```|The cont"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Retrieve a Post",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/posts/:postId",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "posts",
+                            ":postId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            },
+                            {
+                              "key": "postId"
+                            }
+                          ]
+                        },
+                        "description": "| | |n| :--- | :---n|```id```|Unique identifier for the object.n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```password```|The password for the post if it is password protected."
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "pages",
+                  "item": [
+                    {
+                      "name": "List Pages",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/pages",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "pages"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```context```|tScope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```page```|Current page of the collection.<br/>Default: **1**n|```per_page```|Maximum number of items to be returned in result set.<br/>Default: **10**n|```search```|Limit results to those matching a string.n|```after```|Limit response to posts published after a given ISO8601 compliant date.n|```author```|Limit result set to posts a"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Retrieve a Page",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/pages/:pageId",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "pages",
+                            ":pageId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            },
+                            {
+                              "key": "pageId"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the object.n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```password```|The password for the post if it is password protected."
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Update a Page",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/pages/{{pageId}}?title={{title}}&content={{content}}&excerpt={{excerpt}}",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "pages",
+                            "{{pageId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "title",
+                              "value": "{{title}}"
+                            },
+                            {
+                              "key": "content",
+                              "value": "{{content}}"
+                            },
+                            {
+                              "key": "excerpt",
+                              "value": "{{excerpt}}"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the object.n|```date```|The date the object was published, in the site's timezone.n|```date_gmt```|The date the object was published, as GMT.n|```slug```|An alphanumeric identifier for the object unique to its type.n|```status```|A named status for the object.<br/>One of: **publish, future, draft, pending, private**n|```password```|A password to protect access to the content and excerpt.n|```parent```|The ID for the parent of the object.n|```title``"
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "tags",
+                  "item": [
+                    {
+                      "name": "List Tags",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/tags",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "tags"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:--|:---n|```context```|Scope under which the request is made;determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```page```|Current page of the collection.<br/>Default: **1**n|```per_page```|Maximum number of items to be returned in result set.<br/>Default: **10**n|```search```|Limit results to those matching a string.n|```exclude```|Ensure result set excludes specific IDs.n|```include```|Limit result set to specific IDs.n|```offset```|Offset the"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Delete a Tag",
+                      "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/tags/{{tagId}}?force=1",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "tags",
+                            "{{tagId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "force",
+                              "value": "1"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "force",
+                              "value": "",
+                              "type": "string",
+                              "description": {
+                                "content": "",
+                                "type": "text/plain"
+                              }
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the term.n|```force```|Required to be true, as terms do not support trashing.n"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Update a Tag ",
+                      "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/tags/{{tagId}}?name={{test-tag}}",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "tags",
+                            "{{tagId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "name",
+                              "value": "{{test-tag}}"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "name",
+                              "value": "",
+                              "type": "string",
+                              "description": {
+                                "content": "",
+                                "type": "text/plain"
+                              }
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the term.n|```description```|HTML description of the term.n|```name```|HTML title for the term.n|```slug```|An alphanumeric identifier for the term unique to its type.n|```meta```|Meta fields."
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Retrieve a Tag",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/tags/:tagId",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "tags",
+                            ":tagId"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            },
+                            {
+                              "key": "tagId"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```id```|Unique identifier for the term.n|```context```|Scope under which the request is made; |```determines```|fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**"
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "types",
+                  "item": [
+                    {
+                      "name": "List Types",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/types",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "types"
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**"
+                      },
+                      "response": []
+                    },
+                    {
+                      "name": "Retrieve a Type",
+                      "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                          "raw": "{{baseUrl}}/:site/wp-json/wp/v2/types/{{typeId}}?type={{type}}",
+                          "host": [
+                            "{{baseUrl}}"
+                          ],
+                          "path": [
+                            ":site",
+                            "wp-json",
+                            "wp",
+                            "v2",
+                            "types",
+                            "{{typeId}}"
+                          ],
+                          "query": [
+                            {
+                              "key": "type",
+                              "value": "{{type}}"
+                            }
+                          ],
+                          "variable": [
+                            {
+                              "key": "site"
+                            }
+                          ]
+                        },
+                        "description": "|||n|:---|:---n|```type```|An alphanumeric identifier for the post type.<br/> Required:**1**n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**"
+                      },
+                      "response": []
+                    }
+                  ]
+                },
+                {
+                  "name": "Create a Comment ",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/comments?post={{commentPostId}}&content={{content}}&author_name={{author}}&author_email={{email}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        "comments"
+                      ],
+                      "query": [
+                        {
+                          "key": "post",
+                          "value": "{{commentPostId}}"
+                        },
+                        {
+                          "key": "content",
+                          "value": "{{content}}"
+                        },
+                        {
+                          "key": "author_name",
+                          "value": "{{author}}"
+                        },
+                        {
+                          "key": "author_email",
+                          "value": "{{email}}"
+                        }
+                      ],
+                      "variable": [
+                        {
+                          "key": "post",
+                          "value": "",
+                          "type": "string",
+                          "description": {
+                            "content": "",
+                            "type": "text/plain"
+                          }
+                        },
+                        {
+                          "key": "author_name",
+                          "value": "",
+                          "type": "string",
+                          "description": {
+                            "content": "",
+                            "type": "text/plain"
+                          }
+                        },
+                        {
+                          "key": "author_email",
+                          "value": "",
+                          "type": "string",
+                          "description": {
+                            "content": "",
+                            "type": "text/plain"
+                          }
+                        }
+                      ]
+                    },
+                    "description": "|||n|:---|:---n|```post```|The ID of the associated post object.<br/>Required:**1**n|```content```|The content for the object.<br/>Required:**1**n|```author```|The ID of the user object, if author was a user.n|```author_email```|Email address for the object author.n|```author_ip```|IP address for the object author.n|```author_name```|Display name for the object author.n|```author_url```|URL for the object author.n|```author_user_agent```|User agent for the object author.n|```content```|The conte"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Create a wp_block-revision",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/:blockId/autosaves",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        ":blockId",
+                        "autosaves"
+                      ],
+                      "variable": [
+                        {
+                          "key": "site"
+                        },
+                        {
+                          "key": "blockId"
+                        }
+                      ]
+                    },
+                    "description": "|||n|:--|:--n|```parent```|The ID for the parent of the object.n|```date```|The date the object was published, in the site's timezone.n|```date_gmt```|The date the object was published, as GMT.n|```slug```|An alphanumeric identifier for the object unique to its type.n|```status```|A named status for the object.<br/>One of: **publish, future, draft, pending, private**n|```password```|A password to protect access to the content and excerpt.n|```title```|The title for the object.n|```content```|The"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "List Search-results",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/search",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        "search"
+                      ],
+                      "variable": [
+                        {
+                          "key": "site"
+                        }
+                      ]
+                    },
+                    "description": "|||n|:---|:---n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed**n|```page```|Current page of the collection.<br/>Default: **1**n|```per_page```|Maximum number of items to be returned in result set.<br/>Default: **10**n|```search```|Limit results to those matching a string.n|```type```|Limit results to items of an object type.<br/>Default: **post**<br/>One of: **post**n|```subtype```|Limit results to item"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Create a Page",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/pages?content={{content}}&title={{title}}&excerpt={{excerpt}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        "pages"
+                      ],
+                      "query": [
+                        {
+                          "key": "content",
+                          "value": "{{content}}"
+                        },
+                        {
+                          "key": "title",
+                          "value": "{{title}}"
+                        },
+                        {
+                          "key": "excerpt",
+                          "value": "{{excerpt}}"
+                        }
+                      ],
+                      "variable": [
+                        {
+                          "key": "site"
+                        }
+                      ]
+                    },
+                    "description": "|||n|:---|:---n|```date```|The date the object was published, in the site's timezone.n|```date_gmt```|The date the object was published, as GMT.n|```slug```|An alphanumeric identifier for the object unique to its type.n|```status```|A named status for the object.<br/>One of: **publish, future, draft, pending, private**n|```password```|A password to protect access to the content and excerpt.n|```parent```|The ID for the parent of the object.n|```title```|The title for the object.n|```content```|T"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Create a wp_block ",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/blocks?title={{title}}&content={{content}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        "blocks"
+                      ],
+                      "query": [
+                        {
+                          "key": "title",
+                          "value": "{{title}}"
+                        },
+                        {
+                          "key": "content",
+                          "value": "{{content}}"
+                        }
+                      ],
+                      "variable": [
+                        {
+                          "key": "site"
+                        }
+                      ]
+                    },
+                    "description": "| | |n| :--- | :---n|```date```|The date the object was published, in the site's timezone.n|```date_gmt```|The date the object was published, as GMT.n|```slug```|An alphanumeric identifier for the object unique to its type.n|```status```|A named status for the object.<br/>One of: **publish, future, draft, pending, private**n|```password```|A password to protect access to the content and excerpt.n|```title```|The title for the object.n|```content```|The content for the object.n|```template```|The"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "List Themes ",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/themes?status={{themeStatus}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        "themes"
+                      ],
+                      "query": [
+                        {
+                          "key": "status",
+                          "value": "{{themeStatus}}"
+                        }
+                      ],
+                      "variable": [
+                        {
+                          "key": "status",
+                          "value": "",
+                          "type": "string",
+                          "description": {
+                            "content": "",
+                            "type": "text/plain"
+                          }
+                        }
+                      ]
+                    },
+                    "description": "|||n|:---|:---n|```status```|Limit result set to themes assigned one or more statuses.<br/>Required: **1**n|```context```|Scope under which the request is made; determines fields present in response.n|```page```|Current page of the collection.<br/>Default: **1**n|```per_page```|Maximum number of items to be returned in result set.<br/>Default: **10**n|```search```|Limit results to those matching a string."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Create a category",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/categories?name={{categoriesName}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        "categories"
+                      ],
+                      "query": [
+                        {
+                          "key": "name",
+                          "value": "{{categoriesName}}"
+                        }
+                      ],
+                      "variable": [
+                        {
+                          "key": "name",
+                          "value": "",
+                          "type": "string",
+                          "description": {
+                            "content": "",
+                            "type": "text/plain"
+                          }
+                        }
+                      ]
+                    },
+                    "description": "|||n|:---|:---n|```description```|HTML description of the term.n|```name```|HTML title for the term.<br/>Required: **1**n|```slug```|An alphanumeric identifier for the term unique to its type.n|```parent```|The parent term ID.n|```meta```|Meta fields."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Create Posts",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/posts?content={{content}}&title={{title}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        "posts"
+                      ],
+                      "query": [
+                        {
+                          "key": "content",
+                          "value": "{{content}}"
+                        },
+                        {
+                          "key": "title",
+                          "value": "{{title}}"
+                        }
+                      ],
+                      "variable": [
+                        {
+                          "key": "site"
+                        }
+                      ]
+                    },
+                    "description": "| | |n| :--- | :---n|```date```|The date the object was published, in the site's timezone.n|```date_gmt```|The date the object was published, as GMT.n|```slug``` |An alphanumeric identifier for the object unique to its type.n|```status```|A named status for the object.<br/>One of: **publish, future, draft, pending, private**n|```password```|A password to protect access to the content and excerpt.n|```title```|The title for the object.n|```content```|The content for the object.n|```author```|The "
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Update Site Settings ",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/settings",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        "settings"
+                      ],
+                      "variable": [
+                        {
+                          "key": "site"
+                        }
+                      ]
+                    },
+                    "description": "|||n|:---|:---n|```title```|Site title.n|```description```|Site tagline.n|```timezone```|A city in the same timezone as you.n|```date_format```|A date format for all date strings.n|```time_format```|A time format for all time strings.n|```start_of_week```|A day number of the week that the week should start on.n|```language```|WordPress locale code.n|```use_smilies```|Convert emoticons like :-) and :-P to graphics on display.n|```default_category```|Default post category.n|```default_post_format`"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Retrieve a Rendered-block",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/block-renderer/:blockName",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        "block-renderer",
+                        ":blockName"
+                      ],
+                      "variable": [
+                        {
+                          "key": "site"
+                        },
+                        {
+                          "key": "blockName"
+                        }
+                      ]
+                    },
+                    "description": "|||n|:---|:---n|```name```|Unique registered name for the block.n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **edit**n|```attributes```|Attributes for core/tag-cloud blockn|```post_id```|ID of the post context."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Create a Tag ",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp-json/wp/v2/tags?name={{test-tag}}",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp-json",
+                        "wp",
+                        "v2",
+                        "tags"
+                      ],
+                      "query": [
+                        {
+                          "key": "name",
+                          "value": "{{test-tag}}"
+                        }
+                      ],
+                      "variable": [
+                        {
+                          "key": "name",
+                          "value": "",
+                          "type": "string",
+                          "description": {
+                            "content": "",
+                            "type": "text/plain"
+                          }
+                        }
+                      ]
+                    },
+                    "description": "|||n|:---|:---n|```description```|HTML description of the term.n|```name```|HTML title for the term.<br/>Required: **1**n|```slug```|An alphanumeric identifier for the term unique to its type.n|```meta```|Meta fields."
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "Routes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/:site/wp-json",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    ":site",
+                    "wp-json"
+                  ],
+                  "variable": [
+                    {
+                      "key": "site"
+                    }
+                  ]
+                },
+                "description": "Returns all the available API routes and endpoints for a Wordpress instance."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "wp/v2/posts",
+          "item": [
+            {
+              "name": "{{parent Id}}/revisions",
+              "item": [
+                {
+                  "name": "Delete a Post-revision",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp/v2/posts/:parentId/revisions/:revisionsId",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp",
+                        "v2",
+                        "posts",
+                        ":parentId",
+                        "revisions",
+                        ":revisionsId"
+                      ],
+                      "variable": [
+                        {
+                          "key": "site"
+                        },
+                        {
+                          "key": "parentId"
+                        },
+                        {
+                          "key": "revisionsId"
+                        }
+                      ]
+                    },
+                    "description": "| | |n| :--- | :-- n|```parent```|The ID for the parent of the object.n|```id```|Unique identifier for the object.n|```force```|Required to be true, as revisions do not support trashing."
+                  },
+                  "response": []
+                },
+                {
+                  "name": "Retrieve a Post-Revision",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/:site/wp/v2/posts/:parentId/revisions/:revisionId",
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "path": [
+                        ":site",
+                        "wp",
+                        "v2",
+                        "posts",
+                        ":parentId",
+                        "revisions",
+                        ":revisionId"
+                      ],
+                      "variable": [
+                        {
+                          "key": "site"
+                        },
+                        {
+                          "key": "parentId"
+                        },
+                        {
+                          "key": "revisionId"
+                        }
+                      ]
+                    },
+                    "description": "| | |n|:--|:--n|```parent```|The ID for the parent of the object.n|```id```|Unique identifier for the object.n|```context```|Scope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**"
+                  },
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "List Post Revisions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/:site/wp/v2/posts/:postId/revisions",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    ":site",
+                    "wp",
+                    "v2",
+                    "posts",
+                    ":postId",
+                    "revisions"
+                  ],
+                  "variable": [
+                    {
+                      "key": "site"
+                    },
+                    {
+                      "key": "postId"
+                    }
+                  ]
+                },
+                "description": "| | |n| :-- | :--n|```parent``` |The ID for the parent of the object.n|```context```|tScope under which the request is made; determines fields present in response.<br/>Default: **view**<br/>One of: **view, embed, edit**n|```page```|Current page of the collection.<br/>Default: **1**n|```per_page```|Maximum number of items to be returned in result set.n|```search```|Limit results to those matching a string.n|```exclude```|Ensure result set excludes specific IDs.n|```include```t| Limit result set t"
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Update a Comment",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/{{site}} /wp-json/wp/v2/comments/{{commentId}}?content={{content}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "{{site}} ",
+            "wp-json",
+            "wp",
+            "v2",
+            "comments",
+            "{{commentId}}"
+          ],
+          "query": [
+            {
+              "key": "content",
+              "value": "{{content}}"
+            }
+          ]
+        },
+        "description": "|||n|:---|:---n|```id```|Unique identifier for the object.n|```author```|The ID of the user object, if author was a user.n|```author_email```|Email address for the object author.n|```author_ip```|IP address for the object author.n|```author_name```|Display name for the object author.n|```author_url```|URL for the object author.n|```author_user_agent```|User agent for the object author.n|```content```|The content for the object.n|```date```|The date the object was published, in the site's timezon"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "/",
+      "type": "string"
+    },
+    {
+      "key": "caption",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "content",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "title",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "excerpt",
+      "value": "",
+      "type": "any"
+    },
+    {
+      "key": "type",
+      "value": "",
+      "type": "any"
+    }
+  ]
+}

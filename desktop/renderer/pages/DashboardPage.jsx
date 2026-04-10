@@ -836,6 +836,50 @@ function SettingsTab({ user, setUser }) {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState(null);
 
+  // SEO Bot — quick sweep interval
+  const [sites, setSites] = useState([]);
+  const [selectedSiteId, setSelectedSiteId] = useState('');
+  const [sweepInterval, setSweepInterval] = useState(5);
+  const [sweepSaving, setSweepSaving] = useState(false);
+  const [sweepMsg, setSweepMsg] = useState(null);
+
+  useEffect(() => {
+    window.electronAPI.invoke('sites:get-all').then((res) => {
+      const list = Array.isArray(res.sites) ? res.sites : Array.isArray(res) ? res : [];
+      setSites(list);
+      if (list.length > 0) {
+        setSelectedSiteId(list[0]._id);
+      }
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selectedSiteId) return;
+    window.electronAPI.invoke('seo:get-config', { siteId: selectedSiteId }).then((res) => {
+      if (!res.error) setSweepInterval(res.config.quickSweepIntervalMinutes ?? 5);
+    });
+  }, [selectedSiteId]);
+
+  const handleSaveSweep = async () => {
+    if (!selectedSiteId) return;
+    setSweepSaving(true);
+    setSweepMsg(null);
+    const res = await window.electronAPI.invoke('seo:update-config', { siteId: selectedSiteId, quickSweepIntervalMinutes: sweepInterval });
+    setSweepSaving(false);
+    if (res.error) {
+      setSweepMsg({ type: 'err', text: res.error });
+    } else {
+      setSweepMsg({ type: 'ok', text: 'Saved.' });
+      setTimeout(() => setSweepMsg(null), 3000);
+    }
+  };
+
+  const sweepLabel = sweepInterval < 60
+    ? `Every ${sweepInterval} min`
+    : sweepInterval === 60
+    ? 'Every hour'
+    : `Every ${(sweepInterval / 60).toFixed(1).replace('.0', '')} hrs`;
+
   const handleSaveName = async () => {
     if (!name.trim()) return;
     setNameSaving(true);
@@ -938,6 +982,82 @@ function SettingsTab({ user, setUser }) {
             ) : null}
             {nameSaving ? 'Saving…' : 'Save Name'}
           </button>
+        </div>
+      </div>
+
+      {/* SEO Bot */}
+      <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-gray-700">
+          <h3 className="text-white font-semibold text-sm">SEO Bot</h3>
+        </div>
+        <div className="p-5 space-y-4">
+          {sites.length === 0 ? (
+            <p className="text-gray-500 text-xs">No sites connected yet.</p>
+          ) : (
+            <>
+            {sites.length > 1 && (
+              <div>
+                <label className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wide">Site</label>
+                <select
+                  value={selectedSiteId}
+                  onChange={(e) => setSelectedSiteId(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 focus:border-brand-500 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none transition-colors"
+                >
+                  {sites.map((s) => (
+                    <option key={s._id} value={s._id}>{s.label || s.siteUrl}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wide">
+                Quick Sweep Interval
+              </label>
+              <p className="text-gray-500 text-xs mb-3">How often the bot scans for posts that need SEO work. Min 5 min · Max 3 hrs.</p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={5}
+                  max={180}
+                  step={5}
+                  value={sweepInterval}
+                  onChange={(e) => setSweepInterval(Number(e.target.value))}
+                  className="flex-1 accent-brand-500"
+                />
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={5}
+                    max={180}
+                    value={sweepInterval}
+                    onChange={(e) => setSweepInterval(Math.max(5, Math.min(180, Number(e.target.value))))}
+                    className="w-16 bg-gray-700 border border-gray-600 focus:border-brand-500 rounded-xl px-2 py-2 text-white text-sm text-center focus:outline-none transition-colors"
+                  />
+                  <span className="text-gray-400 text-xs">min</span>
+                </div>
+              </div>
+              <p className="text-brand-400 text-xs mt-1.5">{sweepLabel}</p>
+            </div>
+
+            {sweepMsg && (
+              <p className={`text-xs ${sweepMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{sweepMsg.text}</p>
+            )}
+            <button
+              onClick={handleSaveSweep}
+              disabled={sweepSaving}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all text-sm"
+            >
+              {sweepSaving && (
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              )}
+              {sweepSaving ? 'Saving…' : 'Save'}
+            </button>
+            </>
+          )}
         </div>
       </div>
 

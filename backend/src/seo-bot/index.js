@@ -75,10 +75,19 @@ async function start() {
     );
   });
 
+  // Auto-shutdown if Anthropic credits run out mid-run
+  process.once('seo:credit-exhausted', () => {
+    logger.warn('seo-bot: received credit-exhausted signal — stopping all cron tasks');
+    if (quickSweepTask) { try { quickSweepTask.stop(); } catch { /* ignore */ } quickSweepTask = null; }
+    if (weeklyPostTask) { try { weeklyPostTask.stop(); } catch { /* ignore */ } weeklyPostTask = null; }
+    if (nightlyTask) { try { nightlyTask.stop(); } catch { /* ignore */ } nightlyTask = null; }
+  });
+
   logger.info('seo-bot: started — running 24/7 on backend');
 }
 
 function stop() {
+  process.removeAllListeners('seo:credit-exhausted');
   scheduler.stop();
   if (quickSweepTask) { try { quickSweepTask.stop(); } catch { /* ignore */ } quickSweepTask = null; }
   if (weeklyPostTask) { try { weeklyPostTask.stop(); } catch { /* ignore */ } weeklyPostTask = null; }

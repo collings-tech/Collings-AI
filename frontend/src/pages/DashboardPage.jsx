@@ -114,6 +114,8 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
     }
   };
 
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
   const handleLogout = async () => {
     try { await client.post('/auth/logout', {}); } catch { /* ignore */ }
     logout();
@@ -157,7 +159,7 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
             <span className={`text-sm hidden sm:block ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{displayName}</span>
           </div>
           <button
-            onClick={handleLogout}
+            onClick={() => setShowLogoutConfirm(true)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-sm border border-transparent ${isDark ? 'text-gray-400 hover:text-white hover:bg-gray-700 hover:border-gray-600' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 hover:border-gray-300'}`}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -298,6 +300,29 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
 
       {showAddModal && (
         <AddSiteModal onClose={() => setShowAddModal(false)} onSave={handleSiteAdded} />
+      )}
+
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className={`w-full max-w-sm mx-4 rounded-2xl border p-6 shadow-2xl ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <h3 className={`text-base font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>Sign out?</h3>
+            <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>You'll need to sign in again to access your account.</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 rounded-xl text-sm font-medium bg-red-600 hover:bg-red-500 text-white transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -676,6 +701,61 @@ function SettingsTab({ user, setUser }) {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState(null);
 
+  // SEO Bot — quick sweep interval
+  const [sites, setSites] = useState([]);
+  const [selectedSiteId, setSelectedSiteId] = useState('');
+  const [sweepInterval, setSweepInterval] = useState(5);
+  const [sweepLoading, setSweepLoading] = useState(false);
+  const [sweepSaving, setSweepSaving] = useState(false);
+  const [sweepMsg, setSweepMsg] = useState(null);
+
+  const loadSweepConfig = async (siteId) => {
+    if (!siteId) return;
+    setSweepLoading(true);
+    try {
+      const res = await client.get(`/seo/config/${siteId}`);
+      setSweepInterval(res.data.quickSweepIntervalMinutes ?? 5);
+    } catch (err) {
+      setSweepMsg({ type: 'err', text: `Could not load config: ${err.message}` });
+    } finally {
+      setSweepLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    client.get('/sites').then((res) => {
+      const list = Array.isArray(res.data) ? res.data : [];
+      setSites(list);
+      if (list.length > 0) {
+        const id = String(list[0]._id);
+        setSelectedSiteId(id);
+        loadSweepConfig(id);
+      }
+    }).catch((err) => setSweepMsg({ type: 'err', text: `Could not load sites: ${err.message}` }));
+  }, []);
+
+  const handleSaveSweep = async () => {
+    if (!selectedSiteId) return;
+    setSweepSaving(true);
+    setSweepMsg(null);
+    try {
+      const res = await client.put(`/seo/config/${selectedSiteId}`, { quickSweepIntervalMinutes: sweepInterval });
+      // Re-read from the response to confirm what was saved
+      setSweepInterval(res.data.quickSweepIntervalMinutes ?? sweepInterval);
+      setSweepMsg({ type: 'ok', text: 'Saved.' });
+      setTimeout(() => setSweepMsg(null), 3000);
+    } catch (err) {
+      setSweepMsg({ type: 'err', text: err.message });
+    } finally {
+      setSweepSaving(false);
+    }
+  };
+
+  const sweepLabel = sweepInterval < 60
+    ? `Every ${sweepInterval} min`
+    : sweepInterval === 60 ? 'Every hour'
+    : `Every ${(sweepInterval / 60).toFixed(1).replace('.0', '')} hrs`;
+
   const handleSaveName = async () => {
     if (!name.trim()) return;
     setNameSaving(true);
@@ -764,6 +844,73 @@ function SettingsTab({ user, setUser }) {
             {nameSaving && <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>}
             {nameSaving ? 'Saving…' : 'Save Name'}
           </button>
+        </div>
+      </div>
+
+      {/* SEO Bot */}
+      <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-gray-700">
+          <h3 className="text-white font-semibold text-sm">SEO Bot</h3>
+        </div>
+        <div className="p-5 space-y-4">
+          {sites.length === 0 ? (
+            <p className="text-gray-500 text-xs">No sites connected yet.</p>
+          ) : (
+            <>
+              {sites.length > 1 && (
+                <div>
+                  <label className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wide">Site</label>
+                  <select
+                    value={selectedSiteId}
+                    onChange={(e) => { setSelectedSiteId(e.target.value); loadSweepConfig(e.target.value); }}
+                    className="w-full bg-gray-700 border border-gray-600 focus:border-brand-500 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none transition-colors"
+                  >
+                    {sites.map((s) => (
+                      <option key={s._id} value={s._id}>{s.label || s.siteUrl}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wide">Quick Sweep Interval</label>
+                <p className="text-gray-500 text-xs mb-3">How often the bot scans for posts that need SEO work. Min 5 min · Max 3 hrs.</p>
+                <div className={`flex items-center gap-3 ${sweepLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <input
+                    type="range"
+                    min={5}
+                    max={180}
+                    step={5}
+                    value={sweepInterval}
+                    onChange={(e) => setSweepInterval(Number(e.target.value))}
+                    className="flex-1 accent-brand-500"
+                  />
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={5}
+                      max={180}
+                      value={sweepInterval}
+                      onChange={(e) => setSweepInterval(Math.max(5, Math.min(180, Number(e.target.value))))}
+                      className="w-16 bg-gray-700 border border-gray-600 focus:border-brand-500 rounded-xl px-2 py-2 text-white text-sm text-center focus:outline-none transition-colors"
+                    />
+                    <span className="text-gray-400 text-xs">min</span>
+                  </div>
+                </div>
+                <p className="text-brand-400 text-xs mt-1.5">{sweepLabel}</p>
+              </div>
+              {sweepMsg && (
+                <p className={`text-xs ${sweepMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{sweepMsg.text}</p>
+              )}
+              <button
+                onClick={handleSaveSweep}
+                disabled={sweepSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all text-sm"
+              >
+                {sweepSaving && <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>}
+                {sweepSaving ? 'Saving…' : 'Save'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 

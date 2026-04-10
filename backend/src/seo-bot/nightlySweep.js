@@ -130,7 +130,7 @@ async function fetchAllContent(creds, type) {
     try {
       batch = await wpRequest({
         ...creds, method: 'GET', endpoint: `/${type}`,
-        data: { status: 'publish', per_page: 100, page, context: 'edit', _fields: 'id,type,title,content,excerpt,meta' },
+        data: { status: 'publish', per_page: 100, page, context: 'edit', _fields: 'id,type,title,content,excerpt,meta,link,rank_math_focus_keyword,rank_math_title,rank_math_description,rank_math_seo_score' },
       });
     } catch (err) {
       logger.warn('fetchAllContent: batch failed', { type, page, err: err.message });
@@ -155,6 +155,14 @@ async function runQuickSweep() {
     logger.info('Quick sweep: already in progress, skipping');
     return;
   }
+
+  // Don't start if every site has the bot disabled
+  const enabledCount = await SeoSiteConfig.countDocuments({ enabled: true });
+  if (enabledCount === 0) {
+    logger.info('Quick sweep: skipped — SEO bot is disabled for all sites');
+    return;
+  }
+
   isSweeping = true;
   logger.info('Quick sweep: started');
 
@@ -178,6 +186,12 @@ async function quickSweepSite(site) {
   let config = await SeoSiteConfig.findOne({ siteId: site._id });
   if (!config) config = await SeoSiteConfig.create({ siteId: site._id });
   if (!config.enabled) return;
+
+  // Respect the per-site quick sweep interval (default 5 min, max 180 min)
+  const intervalMs = (config.quickSweepIntervalMinutes || 5) * 60 * 1000;
+  if (config.lastSweptAt && (Date.now() - config.lastSweptAt.getTime()) < intervalMs) {
+    return; // not due yet
+  }
 
   let wpAppPassword;
   try {

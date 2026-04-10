@@ -45,7 +45,47 @@ function isTransientError(err) {
   return false;
 }
 
+// Anthropic credit balance exhausted — non-retryable, must shut down the bot
+function isCreditExhaustedError(err) {
+  const msg = err?.message || '';
+  if (msg.includes('credit balance is too low')) return true;
+  // Also catch it when nested in the raw response body string
+  const responseData = err?.response?.data;
+  const bodyStr = typeof responseData === 'string' ? responseData : JSON.stringify(responseData || '');
+  return bodyStr.includes('credit balance is too low');
+}
+
+async function handleCreditExhaustion(job, err) {
+  // Mark the triggering job as failed
+  await SeoJob.findByIdAndUpdate(job._id, {
+    $set: { status: 'failed', completedAt: new Date(), error: err.message },
+  });
+
+  // Disable the SEO bot for all sites so no further jobs are processed
+  try {
+    await SeoSiteConfig.updateMany({}, { $set: { enabled: false } });
+    logger.warn('scheduler: Anthropic credit exhausted — disabled SEO bot for all sites');
+  } catch (dbErr) {
+    logger.error('scheduler: failed to disable site configs after credit exhaustion', { err: dbErr.message });
+  }
+
+  // Stop the scheduler cron tasks immediately
+  stop();
+
+  // Signal index.js to stop its cron tasks (quickSweep, nightly, weekly)
+  process.emit('seo:credit-exhausted');
+
+  logger.error('scheduler: SEO bot shut down due to insufficient Anthropic credits. Recharge your balance and re-enable the bot.', {
+    jobId: job._id, postId: job.postId, err: err.message,
+  });
+}
+
 async function retryOrFail(job, err) {
+  if (isCreditExhaustedError(err)) {
+    await handleCreditExhaustion(job, err);
+    return;
+  }
+
   if (isTransientError(err) && (job.retryCount || 0) < MAX_RETRIES) {
     const retryCount = (job.retryCount || 0) + 1;
     // Exponential back-off: 5m, 15m, 45m

@@ -41,11 +41,41 @@ Always confirm in your reply that the content was saved as a draft.
 You only have access to the single site specified above (${siteUrl}).
 
 ## SEO AUTO-OPTIMIZATION RULE
-Every time you create or edit a post or page, you MUST also write and apply SEO metadata immediately after saving the content.
-1. Derive a focus keyword from the post title and content.
-2. Generate an SEO-optimized meta title (50-60 characters, includes focus keyword).
-3. Generate an SEO-optimized meta description (140-160 characters, includes focus keyword).
-4. Apply via a second wpAction block using the correct plugin meta fields based on ${detectedSeoPlugin}.
+Every time you create or edit a post or page, you MUST emit TWO wpAction blocks:
+
+Block 1 — save the post/page content:
+\`\`\`json
+{ "wpAction": { "method": "POST", "endpoint": "/posts/123", "data": { "title": "...", "content": "...", "status": "draft" } } }
+\`\`\`
+
+Block 2 — write SEO metadata using the correct method for ${detectedSeoPlugin}:
+${detectedSeoPlugin === 'rankmath' ? `For Rank Math, use the Rank Math API Manager plugin endpoint (flat form-encoded params, NOT nested meta object):
+\`\`\`json
+{ "wpAction": { "method": "POST", "endpoint": "/rank-math-api/v2/update-meta", "data": { "post_id": 123, "rank_math_focus_keyword": "focus keyword", "rank_math_title": "SEO Title 50-60 chars", "rank_math_description": "Meta description 140-160 chars" } } }
+\`\`\`
+IMPORTANT: This endpoint only works for posts and products — NOT pages. For pages, omit Block 2.` : detectedSeoPlugin === 'yoast' ? `For Yoast, include meta in the post update:
+\`\`\`json
+{ "wpAction": { "method": "POST", "endpoint": "/posts/123", "data": { "meta": { "_yoast_wpseo_focuskw": "focus keyword", "_yoast_wpseo_title": "SEO Title", "_yoast_wpseo_metadesc": "Meta description" } } } }
+\`\`\`` : `Include an excerpt for the meta description.`}
+
+Both blocks MUST be emitted in the same reply. The system executes all of them automatically.
+
+## SEO METADATA LOOKUP RULE (CRITICAL)
+For ANY question about SEO data — focus keywords, meta titles, meta descriptions, SEO scores, or any Rank Math fields — you MUST retrieve the data using the WordPress REST API with context=edit, which returns all registered Rank Math meta fields.
+
+For a SINGLE post or page:
+\`\`\`json
+{ "wpAction": { "method": "GET", "endpoint": "/posts/{post_id}", "data": { "context": "edit" } } }
+\`\`\`
+
+For ALL posts (bulk / "list all keywords across all posts"):
+Use the special internal endpoint that paginates through ALL posts automatically using GET /wp-json/wp/v2/posts?context=edit under the hood:
+\`\`\`json
+{ "wpAction": { "method": "GET", "endpoint": "/__list_focus_keywords", "data": {} } }
+\`\`\`
+The system will return: totalPostsScanned, totalWithKeywords, uniqueKeywords (array), and posts (array with id, title, link, focusKeyword, metaTitle, metaDescription, type).
+Use this data to give a complete answer. Do NOT emit any further wpAction blocks after this.
+Note: Rank Math's Rank Tracker (Google search ranking history) is a separate cloud feature not available via REST API.
 
 Always confirm what action was taken and provide relevant details.
 If an action fails, explain the error clearly and suggest a fix.`;
@@ -64,18 +94,31 @@ function enforceDraftStatus(params) {
 
 async function wpRequest({ siteUrl, wpUsername, wpAppPassword, method, endpoint, data }) {
   const auth = Buffer.from(`${wpUsername}:${wpAppPassword}`).toString('base64');
-  const url = `${siteUrl}/wp-json/wp/v2${endpoint}`;
+  // Route non-standard namespaces directly under /wp-json (skip /wp/v2 prefix)
+  const isCustomNamespace = endpoint.startsWith('/rankmath/') || endpoint.startsWith('/rank-math-api/');
+  const url = isCustomNamespace
+    ? `${siteUrl}/wp-json${endpoint}`
+    : `${siteUrl}/wp-json/wp/v2${endpoint}`;
+
+  // Rank Math API Manager requires form-encoded body (not JSON)
+  const isRankMathApi = endpoint.startsWith('/rank-math-api/');
+  let requestData = method !== 'GET' ? data : undefined;
+  let contentType = 'application/json';
+  if (isRankMathApi && method !== 'GET' && data) {
+    requestData = new URLSearchParams(data).toString();
+    contentType = 'application/x-www-form-urlencoded';
+  }
 
   const response = await axios({
     method,
     url,
-    data: method !== 'GET' ? data : undefined,
+    data: requestData,
     params: method === 'GET' ? data : undefined,
     headers: {
       Authorization: `Basic ${auth}`,
-      'Content-Type': 'application/json',
+      'Content-Type': contentType,
     },
-    timeout: 15000,
+    timeout: 30000,
   });
 
   return response.data;
@@ -100,15 +143,88 @@ async function uploadMedia({ siteUrl, wpUsername, wpAppPassword, buffer, mimeTyp
   return response.data;
 }
 
-async function executeWpAction({ reply, siteUrl, wpUsername, wpAppPassword, attachments }) {
+function isGetAction(reply) {
   const jsonBlockRegex = /```(?:json)?\s*\{[\s\S]*?"wpAction"[\s\S]*?```/gi;
   const match = reply.match(jsonBlockRegex);
-  if (!match) return null;
+  if (!match) return false;
+  try {
+    const raw = match[0].replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(raw);
+    return parsed.wpAction && parsed.wpAction.method && parsed.wpAction.method.toUpperCase() === 'GET';
+  } catch {
+    return false;
+  }
+}
 
-  const raw = match[0].replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
-  const parsed = JSON.parse(raw);
-  const action = parsed.wpAction;
+async function fetchAllPostsWithKeywords({ siteUrl, wpUsername, wpAppPassword }) {
+  const results = [];
+  for (const type of ['posts', 'pages']) {
+    let page = 1;
+    while (true) {
+      let batch;
+      try {
+        batch = await wpRequest({
+          siteUrl, wpUsername, wpAppPassword,
+          method: 'GET',
+          endpoint: `/${type}`,
+          data: {
+            status: 'publish', per_page: 100, page, context: 'edit',
+            _fields: 'id,type,title,link,meta,rank_math_focus_keyword,rank_math_title,rank_math_description',
+          },
+        });
+      } catch { break; }
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      results.push(...batch);
+      if (batch.length < 100) break;
+      page++;
+    }
+  }
+
+  const withKeywords = [];
+  const allKeywords = new Set();
+
+  for (const post of results) {
+    const kw =
+      (post.rank_math_focus_keyword && post.rank_math_focus_keyword.trim()) ||
+      (post.meta && post.meta.rank_math_focus_keyword && post.meta.rank_math_focus_keyword.trim()) ||
+      '';
+    const metaTitle =
+      (post.rank_math_title && post.rank_math_title.trim()) ||
+      (post.meta && post.meta.rank_math_title && post.meta.rank_math_title.trim()) ||
+      '';
+    const metaDescription =
+      (post.rank_math_description && post.rank_math_description.trim()) ||
+      (post.meta && post.meta.rank_math_description && post.meta.rank_math_description.trim()) ||
+      '';
+    if (kw || metaTitle || metaDescription) {
+      withKeywords.push({
+        id: post.id,
+        title: post.title?.rendered || post.title || '',
+        link: post.link || '',
+        focusKeyword: kw,
+        metaTitle,
+        metaDescription,
+        type: post.type || 'post',
+      });
+      kw.split(',').forEach((k) => { if (k.trim()) allKeywords.add(k.trim()); });
+    }
+  }
+
+  return {
+    totalPostsScanned: results.length,
+    totalWithKeywords: withKeywords.length,
+    uniqueKeywords: [...allKeywords].sort(),
+    posts: withKeywords,
+  };
+}
+
+async function executeSingleAction({ action, siteUrl, wpUsername, wpAppPassword, attachments }) {
   if (!action || !action.method || !action.endpoint) return null;
+
+  // Special internal endpoint: fetch ALL posts/pages and extract focus keywords with pagination
+  if (action.endpoint === '/__list_focus_keywords') {
+    return await fetchAllPostsWithKeywords({ siteUrl, wpUsername, wpAppPassword });
+  }
 
   // Handle media upload
   if (action.endpoint === '/media' && action.method.toUpperCase() === 'POST') {
@@ -141,14 +257,31 @@ async function executeWpAction({ reply, siteUrl, wpUsername, wpAppPassword, atta
 
   if (action.data) enforceDraftStatus(action.data);
 
-  const result = await wpRequest({
+  return await wpRequest({
     siteUrl, wpUsername, wpAppPassword,
     method: action.method.toUpperCase(),
     endpoint: action.endpoint,
     data: action.data,
   });
+}
 
-  return result;
+async function executeWpAction({ reply, siteUrl, wpUsername, wpAppPassword, attachments }) {
+  const jsonBlockRegex = /```(?:json)?\s*\{[\s\S]*?"wpAction"[\s\S]*?```/gi;
+  const matches = reply.match(jsonBlockRegex);
+  if (!matches) return null;
+
+  // Execute ALL wpAction blocks in sequence; return the last meaningful result
+  let lastResult = null;
+  for (const block of matches) {
+    const raw = block.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { continue; }
+    const action = parsed.wpAction;
+    if (!action) continue;
+    const result = await executeSingleAction({ action, siteUrl, wpUsername, wpAppPassword, attachments });
+    if (result) lastResult = result;
+  }
+  return lastResult;
 }
 
 // ---------------------------------------------------------------------------
@@ -259,6 +392,31 @@ exports.sendMessage = async (req, res) => {
       actionResult = await executeWpAction({ reply, siteUrl, wpUsername, wpAppPassword, attachments });
     } catch (actionErr) {
       actionResult = { error: actionErr.message };
+    }
+
+    // If this was a GET action that returned data, feed the result back to Claude
+    // so it can produce a real answer instead of "please allow me a moment..."
+    if (actionResult && !actionResult.error && isGetAction(reply)) {
+      try {
+        const followUp = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 8192,
+          system: systemPrompt,
+          messages: [
+            ...claudeMessages,
+            { role: 'assistant', content: reply },
+            {
+              role: 'user',
+              content: `Here is the WordPress API response data:\n\n${JSON.stringify(actionResult, null, 2)}\n\nNow use this data to fully answer my original question. Do not emit any more wpAction blocks.`,
+            },
+          ],
+        });
+        let followUpReply = '';
+        for (const block of followUp.content) {
+          if (block.type === 'text') followUpReply += block.text;
+        }
+        if (followUpReply.trim()) reply = followUpReply.trim();
+      } catch { /* fall back to original reply */ }
     }
 
     // Persist to history

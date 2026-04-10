@@ -231,12 +231,19 @@ exports.updateConfig = async (req, res, next) => {
     const site = await verifySiteOwnership(req.params.siteId, req.user.id);
     if (!site) return res.status(404).json({ message: 'Site not found' });
 
-    const { enabled, seoPlugin, scoreThresholdRewrite, maxJobsPerCycle } = req.body;
+    const { enabled, seoPlugin, scoreThresholdRewrite, maxJobsPerCycle, quickSweepIntervalMinutes } = req.body;
     const update = {};
     if (enabled !== undefined) update.enabled = enabled;
     if (seoPlugin !== undefined) update.seoPlugin = seoPlugin;
     if (scoreThresholdRewrite !== undefined) update.scoreThresholdRewrite = scoreThresholdRewrite;
     if (maxJobsPerCycle !== undefined) update.maxJobsPerCycle = maxJobsPerCycle;
+    if (quickSweepIntervalMinutes !== undefined) {
+      const mins = parseInt(quickSweepIntervalMinutes, 10);
+      if (isNaN(mins) || mins < 5 || mins > 180) {
+        return res.status(400).json({ message: 'quickSweepIntervalMinutes must be between 5 and 180' });
+      }
+      update.quickSweepIntervalMinutes = mins;
+    }
 
     const config = await SeoSiteConfig.findOneAndUpdate(
       { siteId: site._id },

@@ -9,18 +9,32 @@ function enforceDraftStatus(params) {
 
 async function wpRequest({ siteUrl, wpUsername, wpAppPassword, method, endpoint, data }) {
   const auth = Buffer.from(`${wpUsername}:${wpAppPassword}`).toString('base64');
-  const url = `${siteUrl}/wp-json/wp/v2${endpoint}`;
+
+  // Route custom plugin namespaces directly under /wp-json (skip /wp/v2 prefix)
+  const isCustomNamespace = endpoint.startsWith('/rankmath/') || endpoint.startsWith('/rank-math-api/');
+  const url = isCustomNamespace
+    ? `${siteUrl}/wp-json${endpoint}`
+    : `${siteUrl}/wp-json/wp/v2${endpoint}`;
+
+  // Rank Math API Manager requires form-encoded body
+  const isRankMathApi = endpoint.startsWith('/rank-math-api/');
+  let requestData = method !== 'GET' ? data : undefined;
+  let contentType = 'application/json';
+  if (isRankMathApi && method !== 'GET' && data) {
+    requestData = new URLSearchParams(data).toString();
+    contentType = 'application/x-www-form-urlencoded';
+  }
 
   const response = await axios({
     method,
     url,
-    data: method !== 'GET' ? data : undefined,
+    data: requestData,
     params: method === 'GET' ? data : undefined,
     headers: {
       Authorization: `Basic ${auth}`,
-      'Content-Type': 'application/json',
+      'Content-Type': contentType,
     },
-    timeout: 15000,
+    timeout: 30000,
   });
 
   return response.data;

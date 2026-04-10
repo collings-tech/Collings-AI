@@ -29,29 +29,47 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
   const updateData = {};
 
   if (seoPlugin === 'rankmath') {
-    // RankMath meta fields are NOT reliably writable via the standard WP REST API.
-    // Use RankMath's own REST endpoint instead.
-    try {
-      await wpRequest({
-        ...creds,
-        method: 'POST',
-        _rawUrl: `${creds.siteUrl}/wp-json/rankmath/v1/updateMeta`,
-        data: {
-          objectID: postId,
-          objectType: 'post',
-          meta: {
-            rank_math_focus_keyword: focusKeyword,
-            rank_math_title: metaTitle,
-            rank_math_description: metaDescription,
-            // Include projected score so RankMath stores it immediately —
-            // same as what the Gutenberg editor sends when you click Save.
-            ...(projectedScore ? { rank_math_seo_score: projectedScore } : {}),
+    // Use the Rank Math API Manager plugin endpoint (rank-math-api/v2/update-meta).
+    // This plugin requires form-encoded body with post_id (flat params, not nested meta object).
+    // IMPORTANT: This endpoint only supports posts and products — NOT pages.
+    if (postType !== 'page') {
+      const formParams = new URLSearchParams();
+      formParams.append('post_id', String(postId));
+      if (focusKeyword) formParams.append('rank_math_focus_keyword', focusKeyword);
+      if (metaTitle) formParams.append('rank_math_title', metaTitle);
+      if (metaDescription) formParams.append('rank_math_description', metaDescription);
+
+      try {
+        await axios({
+          method: 'POST',
+          url: `${creds.siteUrl}/wp-json/rank-math-api/v2/update-meta`,
+          data: formParams.toString(),
+          headers: {
+            Authorization: buildAuthHeader(creds.wpUsername, creds.wpAppPassword),
+            'Content-Type': 'application/x-www-form-urlencoded',
           },
-        },
-      });
-    } catch (err) {
-      // Surface this clearly — if the endpoint doesn't exist, scores will never improve
-      throw new Error(`RankMath updateMeta failed for post ${postId}: ${err.response?.status} ${err.response?.data?.message || err.message}`);
+          timeout: 15000,
+        });
+      } catch (err) {
+        // Surface clearly — if this endpoint is missing, the plugin may not be installed
+        throw new Error(`Rank Math API update failed for post ${postId}: ${err.response?.status} ${err.response?.data?.message || err.message}`);
+      }
+    } else {
+      // Pages are not supported by rank-math-api plugin — fall back to standard WP meta endpoint
+      try {
+        await wpRequest({
+          ...creds,
+          method: 'POST',
+          endpoint: `/pages/${postId}`,
+          data: {
+            meta: {
+              rank_math_focus_keyword: focusKeyword,
+              rank_math_title: metaTitle,
+              rank_math_description: metaDescription,
+            },
+          },
+        });
+      } catch { /* non-critical for pages */ }
     }
 
     // Trigger save_post so RankMath recalculates and stores the SEO score.

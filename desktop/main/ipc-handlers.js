@@ -136,11 +136,40 @@ You only have access to the single site specified above (${siteUrl}).
 All WordPress REST API calls must use ${siteUrl} as the base URL.
 
 ## SEO AUTO-OPTIMIZATION RULE
-Every time you create or edit a post or page, you MUST also write and apply SEO metadata immediately after saving the content.
-1. Derive a focus keyword from the post title and content.
-2. Generate an SEO-optimized meta title (50-60 characters, includes focus keyword).
-3. Generate an SEO-optimized meta description (140-160 characters, includes focus keyword).
-4. Apply via a second wpAction block using the correct plugin meta fields based on ${detectedSeoPlugin}.
+Every time you create or edit a post or page, you MUST emit TWO wpAction blocks:
+
+Block 1 — save the post/page content:
+\`\`\`json
+{ "wpAction": { "method": "POST", "endpoint": "/posts/123", "data": { "title": "...", "content": "...", "status": "draft" } } }
+\`\`\`
+
+Block 2 — write SEO metadata using the correct method for ${detectedSeoPlugin}:
+${detectedSeoPlugin === 'rankmath' ? `For Rank Math, use the Rank Math API Manager plugin endpoint (flat params, NOT nested meta):
+\`\`\`json
+{ "wpAction": { "method": "POST", "endpoint": "/rank-math-api/v2/update-meta", "data": { "post_id": 123, "rank_math_focus_keyword": "focus keyword", "rank_math_title": "SEO Title 50-60 chars", "rank_math_description": "Meta description 140-160 chars" } } }
+\`\`\`
+IMPORTANT: This endpoint only works for posts and products — NOT pages. For pages, omit Block 2.` : detectedSeoPlugin === 'yoast' ? `For Yoast, include meta in the post update:
+\`\`\`json
+{ "wpAction": { "method": "POST", "endpoint": "/posts/123", "data": { "meta": { "_yoast_wpseo_focuskw": "focus keyword", "_yoast_wpseo_title": "SEO Title", "_yoast_wpseo_metadesc": "Meta description" } } } }
+\`\`\`` : `Include an excerpt for the meta description.`}
+
+Both blocks MUST be emitted in the same reply. The system executes all of them automatically.
+
+## SEO METADATA LOOKUP RULE (CRITICAL)
+For ANY question about SEO data — focus keywords, meta titles, meta descriptions, SEO scores, or any Rank Math fields — retrieve data using the WordPress REST API with context=edit, which returns all registered Rank Math meta fields.
+
+For a SINGLE post or page:
+\`\`\`json
+{ "wpAction": { "method": "GET", "endpoint": "/posts/{post_id}", "data": { "context": "edit" } } }
+\`\`\`
+
+For ALL posts (bulk / "list all keywords across all posts"):
+Use the special internal endpoint that paginates through ALL posts automatically using GET /wp-json/wp/v2/posts?context=edit under the hood:
+\`\`\`json
+{ "wpAction": { "method": "GET", "endpoint": "/__list_focus_keywords", "data": {} } }
+\`\`\`
+The system will return: totalPostsScanned, totalWithKeywords, uniqueKeywords (array), and posts (array with id, title, link, focusKeyword, metaTitle, metaDescription, type).
+Use this data to give a complete answer. Do NOT emit any further wpAction blocks after this.
 
 ## IMAGE/MEDIA UPLOAD RULE
 When the user attaches an image and wants to upload it to the WordPress media library, generate this wpAction:
@@ -416,61 +445,128 @@ ipcMain.handle('chat:send-message', async (_event, {
  * a WP REST API call. Claude is instructed via the system prompt to structure actions.
  * Format expected: ```json\n{ "wpAction": { "method": "POST", "endpoint": "/posts", "data": {...} } }\n```
  */
-async function executeWpAction({ reply, siteUrl, wpUsername, wpAppPassword, attachments }) {
-  const jsonBlockRegex = /```(?:json)?\s*\{[\s\S]*?"wpAction"[\s\S]*?```/gi;
-  const match = reply.match(jsonBlockRegex);
-  if (!match) return null;
-
-  const raw = match[0].replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
-  const parsed = JSON.parse(raw);
-  const action = parsed.wpAction;
-  if (!action || !action.method || !action.endpoint) return null;
-
-  // Handle media upload: use the actual attached image binary instead of JSON
-  if (action.endpoint === '/media' && action.method.toUpperCase() === 'POST') {
-    const imageAtt = (attachments || []).find((a) => a.type && a.type.startsWith('image/'));
-    if (imageAtt && imageAtt.dataUrl) {
-      const base64Data = imageAtt.dataUrl.split(',')[1];
-      const buffer = Buffer.from(base64Data, 'base64');
-      const uploaded = await uploadMedia({
-        siteUrl, wpUsername, wpAppPassword,
-        buffer,
-        mimeType: imageAtt.type,
-        filename: imageAtt.name || `upload-${Date.now()}.png`,
-      });
-      // Apply Claude's metadata (title, alt_text, caption) if provided
-      const meta = action.data || {};
-      if (uploaded.id && (meta.title || meta.alt_text || meta.caption)) {
-        return await wpRequest({
+async function fetchAllPostsWithKeywords({ siteUrl, wpUsername, wpAppPassword }) {
+  const results = [];
+  for (const type of ['posts', 'pages']) {
+    let page = 1;
+    while (true) {
+      let batch;
+      try {
+        batch = await wpRequest({
           siteUrl, wpUsername, wpAppPassword,
-          method: 'POST',
-          endpoint: `/media/${uploaded.id}`,
+          method: 'GET',
+          endpoint: `/${type}`,
           data: {
-            ...(meta.title && { title: meta.title }),
-            ...(meta.alt_text && { alt_text: meta.alt_text }),
-            ...(meta.caption && { caption: meta.caption }),
+            status: 'publish', per_page: 100, page, context: 'edit',
+            _fields: 'id,type,title,link,meta,rank_math_focus_keyword,rank_math_title,rank_math_description',
           },
         });
-      }
-      return uploaded;
+      } catch { break; }
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      results.push(...batch);
+      if (batch.length < 100) break;
+      page++;
     }
   }
 
-  // Enforce draft-only on write operations
-  if (action.data) {
-    enforceDraftStatus(action.data);
+  const withKeywords = [];
+  const allKeywords = new Set();
+
+  for (const post of results) {
+    const kw =
+      (post.rank_math_focus_keyword && post.rank_math_focus_keyword.trim()) ||
+      (post.meta && post.meta.rank_math_focus_keyword && post.meta.rank_math_focus_keyword.trim()) || '';
+    const metaTitle =
+      (post.rank_math_title && post.rank_math_title.trim()) ||
+      (post.meta && post.meta.rank_math_title && post.meta.rank_math_title.trim()) || '';
+    const metaDescription =
+      (post.rank_math_description && post.rank_math_description.trim()) ||
+      (post.meta && post.meta.rank_math_description && post.meta.rank_math_description.trim()) || '';
+    if (kw || metaTitle || metaDescription) {
+      withKeywords.push({
+        id: post.id,
+        title: post.title?.rendered || post.title || '',
+        link: post.link || '',
+        focusKeyword: kw,
+        metaTitle,
+        metaDescription,
+        type: post.type || 'post',
+      });
+      kw.split(',').forEach((k) => { if (k.trim()) allKeywords.add(k.trim()); });
+    }
   }
 
-  const result = await wpRequest({
-    siteUrl,
-    wpUsername,
-    wpAppPassword,
-    method: action.method.toUpperCase(),
-    endpoint: action.endpoint,
-    data: action.data,
-  });
+  return {
+    totalPostsScanned: results.length,
+    totalWithKeywords: withKeywords.length,
+    uniqueKeywords: [...allKeywords].sort(),
+    posts: withKeywords,
+  };
+}
 
-  return result;
+async function executeWpAction({ reply, siteUrl, wpUsername, wpAppPassword, attachments }) {
+  const jsonBlockRegex = /```(?:json)?\s*\{[\s\S]*?"wpAction"[\s\S]*?```/gi;
+  const matches = reply.match(jsonBlockRegex);
+  if (!matches) return null;
+
+  let lastResult = null;
+  for (const block of matches) {
+    const raw = block.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { continue; }
+    const action = parsed.wpAction;
+    if (!action || !action.method || !action.endpoint) continue;
+
+    // Special internal endpoint: fetch ALL posts/pages with pagination and extract SEO metadata
+    if (action.endpoint === '/__list_focus_keywords') {
+      lastResult = await fetchAllPostsWithKeywords({ siteUrl, wpUsername, wpAppPassword });
+      continue;
+    }
+
+    // Handle media upload: use the actual attached image binary instead of JSON
+    if (action.endpoint === '/media' && action.method.toUpperCase() === 'POST') {
+      const imageAtt = (attachments || []).find((a) => a.type && a.type.startsWith('image/'));
+      if (imageAtt && imageAtt.dataUrl) {
+        const base64Data = imageAtt.dataUrl.split(',')[1];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const uploaded = await uploadMedia({
+          siteUrl, wpUsername, wpAppPassword,
+          buffer,
+          mimeType: imageAtt.type,
+          filename: imageAtt.name || `upload-${Date.now()}.png`,
+        });
+        const meta = action.data || {};
+        if (uploaded.id && (meta.title || meta.alt_text || meta.caption)) {
+          lastResult = await wpRequest({
+            siteUrl, wpUsername, wpAppPassword,
+            method: 'POST',
+            endpoint: `/media/${uploaded.id}`,
+            data: {
+              ...(meta.title && { title: meta.title }),
+              ...(meta.alt_text && { alt_text: meta.alt_text }),
+              ...(meta.caption && { caption: meta.caption }),
+            },
+          });
+        } else {
+          lastResult = uploaded;
+        }
+        continue;
+      }
+    }
+
+    // Enforce draft-only on write operations
+    if (action.data) enforceDraftStatus(action.data);
+
+    const result = await wpRequest({
+      siteUrl, wpUsername, wpAppPassword,
+      method: action.method.toUpperCase(),
+      endpoint: action.endpoint,
+      data: action.data,
+    });
+    if (result) lastResult = result;
+  }
+
+  return lastResult;
 }
 
 // ---------------------------------------------------------------------------

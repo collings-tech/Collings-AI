@@ -114,7 +114,7 @@ export default function ChatPage({ onBack }) {
         userMessage,
         attachments: currentAttachments,
         detectedSeoPlugin,
-      });
+      }, { timeout: 120000 });
 
       const result = res.data;
       if (result.error) {
