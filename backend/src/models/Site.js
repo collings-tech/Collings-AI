@@ -40,6 +40,13 @@ const siteSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Optional: GA4 property ID for this site
+    // e.g. "properties/123456789" (found in GA4 Admin → Property Settings)
+    // The service account must be added as Viewer in GA4 → Admin → Property Access Management
+    gaPropertyId: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );

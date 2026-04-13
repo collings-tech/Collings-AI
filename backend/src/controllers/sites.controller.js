@@ -57,7 +57,7 @@ async function add(req, res, next) {
 async function update(req, res, next) {
   try {
     const { id } = req.params;
-    const { label, siteUrl, wpUsername, wpAppPassword, lastUsedAt } = req.body;
+    const { label, siteUrl, wpUsername, wpAppPassword, lastUsedAt, gaPropertyId, gscProperty } = req.body;
 
     const site = await Site.findOne({ _id: id, userId: req.user.id });
     if (!site) {
@@ -69,6 +69,8 @@ async function update(req, res, next) {
     if (wpUsername !== undefined) site.wpUsername = wpUsername;
     if (wpAppPassword !== undefined) site.wpAppPassword = encrypt(wpAppPassword);
     if (lastUsedAt !== undefined) site.lastUsedAt = lastUsedAt;
+    if (gaPropertyId !== undefined) site.gaPropertyId = gaPropertyId || null;
+    if (gscProperty !== undefined) site.gscProperty = gscProperty || null;
 
     await site.save();
 

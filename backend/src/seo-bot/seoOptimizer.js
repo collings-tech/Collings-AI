@@ -19,6 +19,9 @@ Return exactly this structure:
   "internalLinks": [
     { "anchorText": "descriptive anchor text", "postId": 123, "url": "https://example.com/post" }
   ],
+  "outboundLinks": [
+    { "anchorText": "descriptive anchor text", "url": "https://authoritative-source.com/page" }
+  ],
   "rewrittenContent": null
 }
 
@@ -35,13 +38,25 @@ RANK MATH SCORING RULES — Rank Math checks each of these. Maximise the score:
 
 3. metaDescription: MUST be 140–160 characters. MUST contain the focusKeyword as an exact substring.
 
-4. internalLinks: up to 3 relevant links; empty array [] if none relevant.
+4. internalLinks: up to 3 relevant links from the provided list; empty array [] if none relevant.
 
-5. rewrittenContent: rewritten HTML ONLY when told to rewrite; otherwise exactly null.
+5. outboundLinks: 1–2 external links to well-known authoritative sources relevant to the post topic.
+   Rank Math REQUIRES outbound links — missing them loses 4–8 points.
+   RULES for outboundLinks:
+   - Use ONLY well-known authoritative domains you are 100% confident about:
+     Wikipedia (https://en.wikipedia.org/wiki/<Article_Name>), official .gov/.edu sites,
+     or top-level pages of major established publications (e.g. https://www.investopedia.com/,
+     https://www.irs.gov/, https://www.hud.gov/, https://www.nolo.com/)
+   - DO NOT invent deep article URLs — use Wikipedia or top-level domain pages only if unsure
+   - Links must NOT have rel="nofollow" (they must be dofollow)
+   - Return empty array [] ONLY if the topic has no relevant authoritative external source
+
+6. rewrittenContent: rewritten HTML ONLY when told to rewrite; otherwise exactly null.
    - focusKeyword must appear in the FIRST paragraph as an exact phrase
-   - focusKeyword must appear in at least one <h2> or <h3> subheading
+   - focusKeyword must appear in at least one <h2>, <h3>, or <h4> subheading
    - Keyword density 0.5–2.5% (occurrences / total words)
-   - Use clean HTML only: <p> <h2> <h3> <ul> <li> <strong>
+   - Content MUST be at least 600 words — Rank Math penalises thin content below 600 words
+   - Use clean HTML only: <p> <h2> <h3> <h4> <ul> <li> <strong>
    - CRITICAL: rewrittenContent must be a valid JSON string. Escape all double-quotes as \\" and all backslashes as \\\\. Use \\n for newlines.
 
 IMPORTANT: If metaTitle does not start with or contain the exact focusKeyword, the score will DROP. Always verify before returning.`;
@@ -75,7 +90,45 @@ IMPORTANT: Use this real search data when choosing focusKeyword:
 - The chosen focusKeyword should match or closely reflect one of these real queries`;
 }
 
-async function optimizePost(post, currentSeoMeta, seoPlugin, otherPosts = [], currentScore, rewriteThreshold = 40, gscData = null) {
+/**
+ * Build a GA4 data section appended to the Claude user message.
+ * Provides engagement signals (bounce rate, session duration) so Claude can
+ * prioritise content quality improvements for poorly-engaging pages.
+ */
+function buildGaPromptSection(gaData) {
+  if (!gaData || !gaData.available) return '';
+
+  const parts = [];
+  if (gaData.sessions != null) parts.push(`${gaData.sessions} sessions`);
+  if (gaData.pageviews != null) parts.push(`${gaData.pageviews} pageviews`);
+  if (gaData.bounceRate != null) parts.push(`${gaData.bounceRate}% bounce rate`);
+  if (gaData.avgDuration != null) {
+    const mins = Math.floor(gaData.avgDuration / 60);
+    const secs = Math.round(gaData.avgDuration % 60);
+    parts.push(`avg ${mins}m ${secs}s on page`);
+  }
+
+  if (parts.length === 0) return '';
+
+  const notes = [];
+  if (gaData.bounceRate != null && gaData.bounceRate > 70) {
+    notes.push('- High bounce rate (>70%): readers are leaving quickly — improve the introduction and content depth');
+  }
+  if (gaData.avgDuration != null && gaData.avgDuration < 60) {
+    notes.push('- Low time on page (<1 min): content may be too thin — consider expanding key sections');
+  }
+
+  return `
+
+GOOGLE ANALYTICS 4 DATA (last 28 days for this page):
+${parts.join(' · ')}
+${notes.length > 0 ? '\nEngagement insights:\n' + notes.join('\n') : ''}
+IMPORTANT: Use this engagement data to prioritise content improvements:
+- If bounce rate is high, rewrite the opening paragraph to be more compelling
+- If time on page is low, expand content depth and add subheadings`;
+}
+
+async function optimizePost(post, currentSeoMeta, seoPlugin, otherPosts = [], currentScore, rewriteThreshold = 40, gscData = null, gaData = null, forceRewrite = false) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set in backend environment');
 
@@ -83,7 +136,7 @@ async function optimizePost(post, currentSeoMeta, seoPlugin, otherPosts = [], cu
 
   const postTitle = typeof post.title === 'object' ? post.title.rendered || '' : String(post.title || '');
   const contentHtml = typeof post.content === 'object' ? post.content.rendered || '' : String(post.content || '');
-  const shouldRewrite = currentScore < rewriteThreshold;
+  const shouldRewrite = forceRewrite || currentScore < rewriteThreshold;
 
   const otherPostsText = otherPosts.length > 0
     ? otherPosts.slice(0, 20).map((p) => {
@@ -115,11 +168,11 @@ Task:
 2. Write a metaTitle that is EXACTLY 50–60 characters and contains the focusKeyword as an exact substring.
 3. Write a metaDescription that is EXACTLY 140–160 characters and contains the focusKeyword as an exact substring.
 4. Suggest up to 3 internal links from the list above that are topically relevant.${shouldRewrite
-    ? `\n5. REWRITE the full post content — score ${currentScore} is below rewrite threshold ${rewriteThreshold}. Return clean HTML in rewrittenContent. The focusKeyword must appear as an exact phrase in the first paragraph.`
-    : `\n5. Do NOT rewrite content (score ${currentScore} is above rewrite threshold). Set rewrittenContent to null.`}
+    ? `\n5. REWRITE the full post content${forceRewrite ? ' — content is too thin (under 600 words, Rank Math minimum)' : ` — score ${currentScore} is below rewrite threshold ${rewriteThreshold}`}. Return clean HTML in rewrittenContent. REQUIREMENTS: focusKeyword in first paragraph, focusKeyword in at least one H2/H3/H4, keyword density 0.5–2.5%, minimum 600 words.`
+    : `\n5. Do NOT rewrite content (score ${currentScore} is above threshold). Set rewrittenContent to null.`}
 
 Before returning, verify: does metaTitle contain the focusKeyword exactly? Is metaTitle 50–60 chars? Is metaDescription 140–160 chars?
-Return ONLY the JSON object.${gscData ? buildGscPromptSection(gscData) : ''}`;
+Return ONLY the JSON object.${gscData ? buildGscPromptSection(gscData) : ''}${gaData ? buildGaPromptSection(gaData) : ''}`;
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-5',
@@ -151,6 +204,7 @@ Return ONLY the JSON object.${gscData ? buildGscPromptSection(gscData) : ''}`;
   let metaTitle = '';
   let metaDescription = '';
   let internalLinks = [];
+  let outboundLinks = [];
   let rewrittenContent = null;
 
   if (parsed) {
@@ -158,6 +212,7 @@ Return ONLY the JSON object.${gscData ? buildGscPromptSection(gscData) : ''}`;
     metaTitle = String(parsed.metaTitle || '');
     metaDescription = String(parsed.metaDescription || '');
     internalLinks = Array.isArray(parsed.internalLinks) ? parsed.internalLinks : [];
+    outboundLinks = Array.isArray(parsed.outboundLinks) ? parsed.outboundLinks : [];
     rewrittenContent = parsed.rewrittenContent || null;
   } else {
     // Regex fallback — extract scalar fields individually
@@ -174,6 +229,12 @@ Return ONLY the JSON object.${gscData ? buildGscPromptSection(gscData) : ''}`;
       if (linksMatch) internalLinks = JSON.parse(linksMatch[1]);
     } catch { /* leave as [] */ }
 
+    // Try to parse outboundLinks array
+    try {
+      const obLinksMatch = rawResponse.match(/"outboundLinks"\s*:\s*(\[[\s\S]*?\])/);
+      if (obLinksMatch) outboundLinks = JSON.parse(obLinksMatch[1]);
+    } catch { /* leave as [] */ }
+
     // Extract rewrittenContent between its key and the closing brace — handles unescaped HTML
     if (shouldRewrite) {
       try {
@@ -187,11 +248,17 @@ Return ONLY the JSON object.${gscData ? buildGscPromptSection(gscData) : ''}`;
     }
   }
 
+  // Validate outboundLinks: must be external URLs (starting with http/https)
+  const validOutbound = outboundLinks.filter(
+    (l) => l && l.url && l.anchorText && /^https?:\/\//i.test(l.url)
+  ).slice(0, 2);
+
   return {
     focusKeyword: focusKeyword.slice(0, 60),
     metaTitle: metaTitle.slice(0, 70),
     metaDescription: metaDescription.slice(0, 200),
     internalLinks: internalLinks.slice(0, 3),
+    outboundLinks: validOutbound,
     rewrittenContent: shouldRewrite && rewrittenContent ? String(rewrittenContent) : null,
   };
 }

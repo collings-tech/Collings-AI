@@ -54,7 +54,11 @@ function extractSeoMeta(post, seoPlugin) {
 const SENTIMENT_WORDS = ['best', 'top', 'proven', 'ultimate', 'expert', 'essential', 'powerful', 'effective', 'reliable', 'trusted', 'leading', 'premier', 'exceptional', 'outstanding', 'superior', 'perfect', 'complete', 'comprehensive', 'definitive', 'authoritative'];
 const POWER_WORDS = ['guide', 'secrets', 'tips', 'strategies', 'blueprint', 'mastery', 'insider', 'revealed', 'discover', 'learn', 'steps', 'ways', 'mistakes', 'facts', 'reasons', 'benefits', 'solutions', 'answers', 'results', 'success'];
 
-function scorePost(post, seoPlugin) {
+function escapeRegexDomain(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function scorePost(post, seoPlugin, siteUrl = '') {
   const seoMeta = extractSeoMeta(post, seoPlugin);
 
   const { focusKeyword, metaTitle, metaDescription } = seoMeta;
@@ -75,7 +79,7 @@ function scorePost(post, seoPlugin) {
     keywordInSubheading: 0,   // 4
     keywordDensity: 0,        // 4
     hasInternalLink: 0,       // 4
-    outboundLinks: 0,         // 4 — we don't add outbound links, assume 0
+    outboundLinks: 0,         // 4
     titleLength: 0,           // 5
     descriptionLength: 0,     // 5
     // Title readability (~15 pts)
@@ -92,8 +96,8 @@ function scorePost(post, seoPlugin) {
     if (containsKeyword(metaDescription, focusKeyword)) breakdown.keywordInDescription = 4;
     if (containsKeyword(first10pct, focusKeyword)) breakdown.keywordInFirstPara = 8;
     if (containsKeyword(contentText, focusKeyword)) breakdown.keywordInContent = 4;
-    // Keyword in subheadings (h2/h3 text)
-    const subheadingText = (contentHtml.match(/<h[23][^>]*>(.*?)<\/h[23]>/gi) || [])
+    // Keyword in subheadings (h2/h3/h4 text — Rank Math checks all heading levels)
+    const subheadingText = (contentHtml.match(/<h[234][^>]*>(.*?)<\/h[234]>/gi) || [])
       .map((h) => stripHtml(h)).join(' ');
     if (containsKeyword(subheadingText, focusKeyword)) breakdown.keywordInSubheading = 4;
     const density = calcKeywordDensity(contentText, focusKeyword);
@@ -111,8 +115,17 @@ function scorePost(post, seoPlugin) {
   else if (descLen >= 100 && descLen <= 180) breakdown.descriptionLength = 3;
 
   if (/<a\s[^>]*href=["'][^"']+["'][^>]*>/i.test(contentHtml)) breakdown.hasInternalLink = 4;
-  if (/<h[23][\s>]/i.test(contentHtml)) breakdown.hasSubheadings = 5;
+  if (/<h[2-4][\s>]/i.test(contentHtml)) breakdown.hasSubheadings = 5;
   if (/<p[\s>]/i.test(contentHtml)) breakdown.hasShortParagraphs = 5; // assume OK if has paragraphs
+
+  // Detect outbound (external) links — links to domains other than this site
+  if (siteUrl) {
+    const domain = siteUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+    const externalLinkRe = new RegExp(
+      `href=["']https?://(?!(?:www\\.)?${escapeRegexDomain(domain)})[^"']+["']`, 'i'
+    );
+    if (externalLinkRe.test(contentHtml)) breakdown.outboundLinks = 4;
+  }
 
   // Title readability
   if (SENTIMENT_WORDS.some((w) => titleLower.includes(w))) breakdown.titleSentimentWord = 5;
@@ -132,7 +145,7 @@ function scorePost(post, seoPlugin) {
  * Build a fake post object that reflects the optimized meta values, then score it.
  * Used to verify the new values will actually increase the score before writing to WP.
  */
-function simulateScore(currentPost, seoPlugin, optimized) {
+function simulateScore(currentPost, seoPlugin, optimized, siteUrl = '') {
   const simulatedPost = { ...currentPost };
 
   if (seoPlugin === 'rankmath') {
@@ -159,13 +172,17 @@ function simulateScore(currentPost, seoPlugin, optimized) {
   }
 
   // Simulate the final content state — exactly what will be written to WordPress
+  const currentContent = typeof currentPost.content === 'object'
+    ? currentPost.content.raw || currentPost.content.rendered || ''
+    : String(currentPost.content || '');
+
   if (optimized.rewrittenContent) {
     // Unescape JSON-encoded content so the scorer sees clean HTML
     const cleanHtml = optimized.rewrittenContent
       .replace(/\\n/g, '\n')
       .replace(/\\"/g, '"')
       .replace(/\\\\/g, '\\');
-    // Mirror pluginWriter: always append related posts section after a rewrite
+    // Mirror pluginWriter: append related posts + further reading after a rewrite
     let finalHtml = cleanHtml;
     if (optimized.internalLinks && optimized.internalLinks.length > 0 && !finalHtml.includes('<!-- seo-bot-related-posts -->')) {
       const valid = optimized.internalLinks.filter((l) => l && l.url && l.anchorText);
@@ -174,23 +191,36 @@ function simulateScore(currentPost, seoPlugin, optimized) {
         finalHtml += `\n<!-- seo-bot-related-posts -->\n<h3>Related Posts</h3>\n<ul>\n${items}\n</ul>\n`;
       }
     }
+    if (optimized.outboundLinks && optimized.outboundLinks.length > 0 && !finalHtml.includes('<!-- seo-bot-further-reading -->')) {
+      const valid = optimized.outboundLinks.filter((l) => l && l.url && l.anchorText);
+      if (valid.length > 0) {
+        const items = valid.map((l) => `<li><a href="${l.url}">${l.anchorText}</a></li>`).join('\n');
+        finalHtml += `\n<!-- seo-bot-further-reading -->\n<h3>Further Reading</h3>\n<ul>\n${items}\n</ul>\n`;
+      }
+    }
     simulatedPost.content = { rendered: finalHtml, raw: finalHtml };
-  } else if (optimized.internalLinks && optimized.internalLinks.length > 0) {
-    // Simulate the related posts section that writeSeoMeta appends
-    const currentContent = typeof currentPost.content === 'object'
-      ? currentPost.content.raw || currentPost.content.rendered || ''
-      : String(currentPost.content || '');
-    const valid = optimized.internalLinks.filter((l) => l && l.url && l.anchorText);
-    if (valid.length > 0 && !currentContent.includes('<!-- seo-bot-related-posts -->')) {
-      const items = valid.map((l) =>
-        `<li><a href="${l.url}">${l.anchorText}</a></li>`
-      ).join('\n');
-      const relatedSection = `\n<!-- seo-bot-related-posts -->\n<h3>Related Posts</h3>\n<ul>\n${items}\n</ul>\n`;
-      simulatedPost.content = { rendered: currentContent + relatedSection, raw: currentContent + relatedSection };
+  } else {
+    let appendedContent = currentContent;
+    if (optimized.internalLinks && optimized.internalLinks.length > 0) {
+      const valid = optimized.internalLinks.filter((l) => l && l.url && l.anchorText);
+      if (valid.length > 0 && !appendedContent.includes('<!-- seo-bot-related-posts -->')) {
+        const items = valid.map((l) => `<li><a href="${l.url}">${l.anchorText}</a></li>`).join('\n');
+        appendedContent += `\n<!-- seo-bot-related-posts -->\n<h3>Related Posts</h3>\n<ul>\n${items}\n</ul>\n`;
+      }
+    }
+    if (optimized.outboundLinks && optimized.outboundLinks.length > 0) {
+      const valid = optimized.outboundLinks.filter((l) => l && l.url && l.anchorText);
+      if (valid.length > 0 && !appendedContent.includes('<!-- seo-bot-further-reading -->')) {
+        const items = valid.map((l) => `<li><a href="${l.url}">${l.anchorText}</a></li>`).join('\n');
+        appendedContent += `\n<!-- seo-bot-further-reading -->\n<h3>Further Reading</h3>\n<ul>\n${items}\n</ul>\n`;
+      }
+    }
+    if (appendedContent !== currentContent) {
+      simulatedPost.content = { rendered: appendedContent, raw: appendedContent };
     }
   }
 
-  return scorePost(simulatedPost, seoPlugin);
+  return scorePost(simulatedPost, seoPlugin, siteUrl);
 }
 
-module.exports = { scorePost, simulateScore, extractSeoMeta, stripHtml };
+module.exports = { scorePost, simulateScore, extractSeoMeta, stripHtml, wordCount };

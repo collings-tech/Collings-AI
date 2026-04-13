@@ -12,11 +12,12 @@ const SeoJob = require('../models/SeoJob');
 const SeoLog = require('../models/SeoLog');
 const SeoSiteConfig = require('../models/SeoSiteConfig');
 const { decrypt } = require('../utils/crypto');
-const { scorePost, simulateScore } = require('./seoScorer');
+const { scorePost, simulateScore, stripHtml, wordCount } = require('./seoScorer');
 const { optimizePost, generateImageAltText } = require('./seoOptimizer');
 const { writeSeoMeta, wpRequest, fixImageAltText } = require('./pluginWriter');
 const logger = require('./logger');
 const gscService = require('./gscService');
+const gaService = require('./gaService');
 
 const MAX_JOBS_PER_CYCLE = parseInt(process.env.MAX_JOBS_PER_CYCLE || '10', 10);
 const SEO_REWRITE_THRESHOLD = parseInt(process.env.SEO_REWRITE_THRESHOLD || '60', 10);
@@ -40,7 +41,7 @@ const MAX_RETRIES = 3;
 // Transient HTTP/network errors that warrant a retry
 function isTransientError(err) {
   const status = err?.response?.status;
-  if (status && [429, 500, 502, 503, 504].includes(status)) return true;
+  if (status && [429, 500, 502, 503, 504, 529].includes(status)) return true;
   const code = err?.code;
   if (code && ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND', 'EPIPE'].includes(code)) return true;
   return false;
@@ -215,8 +216,8 @@ async function processQueue(priorityFilter) {
         // processJob handles its own retry/fail — just continue
       }
 
-      // Small delay between jobs to avoid overwhelming the WordPress server
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Small delay between jobs to avoid overwhelming the WordPress server and Claude API
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
 
     logger.info('processQueue: cycle complete', { priority: priorityFilter, processed: jobs.length });
@@ -303,15 +304,36 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
     const post = await wpRequest({ ...creds, method: 'GET', endpoint: `${endpoint}?context=edit` });
 
     // 2. Score
-    const { score: scoreBefore, seoMeta: currentSeoMeta } = scorePost(post, seoPlugin);
+    const { score: scoreBefore, breakdown: breakdownBefore, seoMeta: currentSeoMeta } = scorePost(post, seoPlugin, creds.siteUrl);
     logger.info('processJob: scored', { postId: job.postId, scoreBefore });
 
-    if (scoreBefore >= 65 && job.priority > 1) {
-      logger.info('processJob: already Good, skipping', { postId: job.postId });
+    // Determine if content needs a forced rewrite:
+    //   (a) Thin content — under 600 words (Rank Math minimum)
+    //   (b) Poor keyword coverage in content — keyword not in first para / subheadings / body
+    //       These 4 checks are worth up to 20 pts; if we're scoring < 16 we're missing key points
+    const contentHtmlRaw = typeof post.content === 'object' ? post.content.rendered || '' : String(post.content || '');
+    const contentWords = wordCount(stripHtml(contentHtmlRaw));
+    const contentKeywordPts = (breakdownBefore.keywordInFirstPara || 0) +
+                               (breakdownBefore.keywordInContent || 0) +
+                               (breakdownBefore.keywordInSubheading || 0) +
+                               (breakdownBefore.keywordDensity || 0);
+
+    const forceRewrite = contentWords < 600 || contentKeywordPts < 16;
+    if (forceRewrite) {
+      const reason = contentWords < 600
+        ? `thin content (${contentWords} words)`
+        : `poor keyword coverage in content (${contentKeywordPts}/20 pts)`;
+      logger.info('processJob: will force rewrite', { postId: job.postId, reason });
+    }
+
+    // Only skip posts that are already at 80+ — the target average score.
+    // Posts scoring 65–79 need further optimisation to reach the 80 target.
+    if (scoreBefore >= 80 && job.priority > 1 && !forceRewrite) {
+      logger.info('processJob: already at 80+, skipping', { postId: job.postId });
       await SeoJob.findByIdAndUpdate(job._id, {
         $set: {
           status: 'completed', completedAt: new Date(),
-          result: { action: 'skipped', skippedReason: `Score already good (${scoreBefore})` },
+          result: { action: 'skipped', skippedReason: `Score already at target (${scoreBefore})` },
         },
       });
       return;
@@ -341,12 +363,27 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
       }
     }
 
-    // 5. Ask Claude (with optional GSC data)
-    const optimized = await optimizePost(post, currentSeoMeta, seoPlugin, otherPosts || [], scoreBefore, rewriteThreshold, gscData);
+    // 5. Fetch GA4 data for this specific page (non-critical, graceful degradation)
+    let gaData = null;
+    if (gaService.isGaConfigured() && site.gaPropertyId) {
+      try {
+        const pageUrl = post.link || `${creds.siteUrl}/?p=${job.postId}`;
+        const gaResult = await gaService.getPageMetrics(site.gaPropertyId, pageUrl, 28);
+        if (gaResult.available) {
+          gaData = gaResult;
+          logger.info('processJob: fetched GA metrics', { postId: job.postId, sessions: gaResult.sessions });
+        }
+      } catch (err) {
+        logger.warn('processJob: GA fetch failed (non-critical)', { postId: job.postId, err: err.message });
+      }
+    }
 
-    // 4b. Simulate the score with the new values before touching WordPress.
+    // 6. Ask Claude (with optional GSC + GA data)
+    const optimized = await optimizePost(post, currentSeoMeta, seoPlugin, otherPosts || [], scoreBefore, rewriteThreshold, gscData, gaData, forceRewrite);
+
+    // 7. Simulate the score with the new values before touching WordPress.
     // If the optimized values would not improve the score, skip writing entirely.
-    const { score: simulatedScore } = simulateScore(post, seoPlugin, optimized);
+    const { score: simulatedScore } = simulateScore(post, seoPlugin, optimized, creds.siteUrl);
     logger.info('processJob: simulated score', { postId: job.postId, scoreBefore, simulatedScore });
 
     if (simulatedScore <= scoreBefore) {
@@ -362,16 +399,16 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
       return;
     }
 
-    // 5. Write back to WordPress — throws if the write is rejected
+    // 8. Write back to WordPress — throws if the write is rejected
     await writeSeoMeta(creds, job.postId, job.postType, seoPlugin, optimized, post, simulatedScore);
 
-    // 6. RankMath scores are calculated client-side in the browser — they're never computed
+    // 9. RankMath scores are calculated client-side in the browser — they're never computed
     // server-side, so re-fetching will always return the stale pre-write score.
     // Use simulatedScore as scoreAfter: it's calculated from exactly what we wrote.
     const scoreAfter = simulatedScore;
     logger.info('processJob: write complete', { postId: job.postId, scoreBefore, scoreAfter });
 
-    // 7. Save log — and mirror to all other users who share this WordPress URL
+    // 10. Save log — and mirror to all other users who share this WordPress URL
     const postTitle = typeof post.title === 'object' ? post.title.rendered || '' : String(post.title || '');
     const logEntry = {
       postId: job.postId,
@@ -383,6 +420,7 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
         metaTitle: { before: currentSeoMeta.metaTitle, after: optimized.metaTitle },
         metaDescription: { before: currentSeoMeta.metaDescription, after: optimized.metaDescription },
         internalLinksAdded: optimized.internalLinks.length,
+        outboundLinksAdded: (optimized.outboundLinks || []).length,
         contentRewritten: !!optimized.rewrittenContent,
       },
     };

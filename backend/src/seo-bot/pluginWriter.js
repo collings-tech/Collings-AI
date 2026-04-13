@@ -24,7 +24,7 @@ async function wpRequest({ siteUrl, wpUsername, wpAppPassword, method, endpoint,
 
 // currentPost is the already-fetched post object (passed from scheduler to avoid a duplicate GET)
 async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, currentPost, projectedScore) {
-  const { focusKeyword, metaTitle, metaDescription, internalLinks, rewrittenContent } = seoData;
+  const { focusKeyword, metaTitle, metaDescription, internalLinks, outboundLinks, rewrittenContent } = seoData;
   const endpoint = `/${postType === 'page' ? 'pages' : 'posts'}/${postId}`;
   const updateData = {};
 
@@ -87,17 +87,24 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
     updateData.excerpt = metaDescription;
   }
 
-  if (rewrittenContent || (internalLinks && internalLinks.length > 0)) {
+  const hasInternalLinks = internalLinks && internalLinks.length > 0;
+  const hasOutboundLinks = outboundLinks && outboundLinks.length > 0;
+
+  if (rewrittenContent || hasInternalLinks || hasOutboundLinks) {
     // Pages are always published after SEO optimization; posts preserve their existing status
     const originalStatus = currentPost?.status || 'draft';
     const preservedStatus = postType === 'page' ? 'publish' : (originalStatus === 'publish' ? 'publish' : 'draft');
 
     if (rewrittenContent) {
-      // Always append related posts section after a rewrite so we don't lose link points
+      // Append related posts + further reading after a rewrite so we don't lose link points
       let finalContent = rewrittenContent;
-      if (internalLinks && internalLinks.length > 0 && !finalContent.includes('<!-- seo-bot-related-posts -->')) {
+      if (hasInternalLinks && !finalContent.includes('<!-- seo-bot-related-posts -->')) {
         const relatedSection = buildRelatedPostsSection(internalLinks);
         if (relatedSection) finalContent += relatedSection;
+      }
+      if (hasOutboundLinks && !finalContent.includes('<!-- seo-bot-further-reading -->')) {
+        const furtherSection = buildFurtherReadingSection(outboundLinks);
+        if (furtherSection) finalContent += furtherSection;
       }
       updateData.content = finalContent;
       updateData.status = preservedStatus;
@@ -106,12 +113,21 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
         ? currentPost.content.raw || currentPost.content.rendered || ''
         : String(currentPost.content || '');
 
-      if (!currentContent.includes('<!-- seo-bot-related-posts -->')) {
+      let appendedContent = currentContent;
+
+      if (hasInternalLinks && !appendedContent.includes('<!-- seo-bot-related-posts -->')) {
         const relatedSection = buildRelatedPostsSection(internalLinks);
-        if (relatedSection) {
-          updateData.content = currentContent + relatedSection;
-          updateData.status = preservedStatus;
-        }
+        if (relatedSection) appendedContent += relatedSection;
+      }
+
+      if (hasOutboundLinks && !appendedContent.includes('<!-- seo-bot-further-reading -->')) {
+        const furtherSection = buildFurtherReadingSection(outboundLinks);
+        if (furtherSection) appendedContent += furtherSection;
+      }
+
+      if (appendedContent !== currentContent) {
+        updateData.content = appendedContent;
+        updateData.status = preservedStatus;
       }
     }
   }
@@ -128,6 +144,16 @@ function buildRelatedPostsSection(internalLinks) {
     `<li><a href="${l.url.replace(/"/g, '&quot;')}">${String(l.anchorText).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a></li>`
   ).join('\n');
   return `\n<!-- seo-bot-related-posts -->\n<h3>Related Posts</h3>\n<ul>\n${items}\n</ul>\n`;
+}
+
+function buildFurtherReadingSection(outboundLinks) {
+  const valid = outboundLinks.filter((l) => l && l.url && l.anchorText && /^https?:\/\//i.test(l.url));
+  if (!valid.length) return '';
+  // Links must be dofollow (no rel="nofollow") so Rank Math counts them as outbound links
+  const items = valid.map((l) =>
+    `<li><a href="${l.url.replace(/"/g, '&quot;')}" target="_blank">${String(l.anchorText).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a></li>`
+  ).join('\n');
+  return `\n<!-- seo-bot-further-reading -->\n<h3>Further Reading</h3>\n<ul>\n${items}\n</ul>\n`;
 }
 
 async function fixImageAltText(creds, mediaId, altText) {

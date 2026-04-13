@@ -714,6 +714,19 @@ function SettingsTab({ user, setUser }) {
   const [sweepSaving, setSweepSaving] = useState(false);
   const [sweepMsg, setSweepMsg] = useState(null);
 
+  // Google Integrations — per-site GA4 + GSC property IDs
+  const [googleSiteId, setGoogleSiteId] = useState('');
+  const [gaPropertyId, setGaPropertyId] = useState('');
+  const [gscProperty, setGscProperty] = useState('');
+  const [googleSaving, setGoogleSaving] = useState(false);
+  const [googleMsg, setGoogleMsg] = useState(null);
+
+  const loadGoogleConfig = (siteId, siteList) => {
+    const site = (siteList || sites).find((s) => String(s._id) === siteId);
+    setGaPropertyId(site?.gaPropertyId || '');
+    setGscProperty(site?.gscProperty || '');
+  };
+
   const loadSweepConfig = async (siteId) => {
     if (!siteId) return;
     setSweepLoading(true);
@@ -727,6 +740,28 @@ function SettingsTab({ user, setUser }) {
     }
   };
 
+  const handleSaveGoogle = async () => {
+    if (!googleSiteId) return;
+    setGoogleSaving(true);
+    setGoogleMsg(null);
+    try {
+      const payload = {
+        gaPropertyId: gaPropertyId.trim() || null,
+        gscProperty: gscProperty.trim() || null,
+      };
+      await client.put(`/sites/${googleSiteId}`, payload);
+      setSites((prev) => prev.map((s) =>
+        String(s._id) === googleSiteId ? { ...s, ...payload } : s
+      ));
+      setGoogleMsg({ type: 'ok', text: 'Saved.' });
+      setTimeout(() => setGoogleMsg(null), 3000);
+    } catch (err) {
+      setGoogleMsg({ type: 'err', text: err.message });
+    } finally {
+      setGoogleSaving(false);
+    }
+  };
+
   useEffect(() => {
     client.get('/sites').then((res) => {
       const list = Array.isArray(res.data) ? res.data : [];
@@ -734,7 +769,9 @@ function SettingsTab({ user, setUser }) {
       if (list.length > 0) {
         const id = String(list[0]._id);
         setSelectedSiteId(id);
+        setGoogleSiteId(id);
         loadSweepConfig(id);
+        loadGoogleConfig(id, list);
       }
     }).catch((err) => setSweepMsg({ type: 'err', text: `Could not load sites: ${err.message}` }));
   }, []);
@@ -913,6 +950,72 @@ function SettingsTab({ user, setUser }) {
               >
                 {sweepSaving && <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>}
                 {sweepSaving ? 'Saving…' : 'Save'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Google Integrations */}
+      <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-gray-700">
+          <h3 className="text-white font-semibold text-sm">Google Integrations</h3>
+        </div>
+        <div className="p-5 space-y-4">
+          {sites.length === 0 ? (
+            <p className="text-gray-500 text-xs">No sites connected yet.</p>
+          ) : (
+            <>
+              {sites.length > 1 && (
+                <div>
+                  <label className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wide">Site</label>
+                  <select
+                    value={googleSiteId}
+                    onChange={(e) => { setGoogleSiteId(e.target.value); loadGoogleConfig(e.target.value); }}
+                    className="w-full bg-gray-700 border border-gray-600 focus:border-brand-500 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none transition-colors"
+                  >
+                    {sites.map((s) => (
+                      <option key={s._id} value={s._id}>{s.label || s.siteUrl}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wide">GA4 Property ID</label>
+                <p className="text-gray-500 text-xs mb-2">
+                  Found in GA4 → Admin → Property Settings. Format: <code className="bg-gray-700 px-1 rounded">properties/123456789</code>
+                </p>
+                <input
+                  type="text"
+                  value={gaPropertyId}
+                  onChange={(e) => setGaPropertyId(e.target.value)}
+                  placeholder="properties/123456789"
+                  className="w-full bg-gray-700 border border-gray-600 focus:border-brand-500 text-white placeholder-gray-500 rounded-xl px-3 py-2.5 text-sm focus:outline-none transition-colors font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 text-xs font-semibold mb-1.5 uppercase tracking-wide">GSC Property Override <span className="text-gray-600 normal-case font-normal">(optional)</span></label>
+                <p className="text-gray-500 text-xs mb-2">
+                  Leave blank to auto-detect. Set only if auto-detection fails. Format: <code className="bg-gray-700 px-1 rounded">sc-domain:example.com</code>
+                </p>
+                <input
+                  type="text"
+                  value={gscProperty}
+                  onChange={(e) => setGscProperty(e.target.value)}
+                  placeholder="sc-domain:example.com  or  https://www.example.com/"
+                  className="w-full bg-gray-700 border border-gray-600 focus:border-brand-500 text-white placeholder-gray-500 rounded-xl px-3 py-2.5 text-sm focus:outline-none transition-colors font-mono"
+                />
+              </div>
+              {googleMsg && (
+                <p className={`text-xs ${googleMsg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>{googleMsg.text}</p>
+              )}
+              <button
+                onClick={handleSaveGoogle}
+                disabled={googleSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all text-sm"
+              >
+                {googleSaving && <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>}
+                {googleSaving ? 'Saving…' : 'Save'}
               </button>
             </>
           )}

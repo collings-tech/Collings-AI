@@ -6,6 +6,7 @@ const { ANTHROPIC_API_KEY } = require('../config/env');
 const ChatHistory = require('../models/ChatHistory');
 const SeoJob = require('../models/SeoJob');
 const gscService = require('../seo-bot/gscService');
+const gaService = require('../seo-bot/gaService');
 const Site = require('../models/Site');
 
 // ---------------------------------------------------------------------------
@@ -25,6 +26,25 @@ const GSC_KEYWORDS = [
 function isGscQuestion(message) {
   const lower = message.toLowerCase();
   return GSC_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+// ---------------------------------------------------------------------------
+// GA question detector
+// ---------------------------------------------------------------------------
+
+const GA_KEYWORDS = [
+  'pageviews', 'page views', 'sessions', 'bounce rate', 'bounce',
+  'time on page', 'average session', 'avg session', 'session duration',
+  'traffic source', 'traffic sources', 'referral', 'referral traffic',
+  'direct traffic', 'google analytics', 'analytics data',
+  'users', 'new users', 'returning users', 'engagement rate',
+  'conversion', 'conversions', 'goals', 'events', 'channel grouping',
+  'organic sessions', 'how many visitors', 'visitor count',
+];
+
+function isGaQuestion(message) {
+  const lower = message.toLowerCase();
+  return GA_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 // ---------------------------------------------------------------------------
@@ -415,6 +435,49 @@ exports.sendMessage = async (req, res) => {
       } catch { /* non-critical — proceed without GSC */ }
     }
 
+    // Pre-fetch GA4 data if the question is about sessions/engagement/traffic sources
+    let gaContext = null;
+    if (userMessage && gaService.isGaConfigured() && isGaQuestion(userMessage)) {
+      try {
+        let gaPropertyId = null;
+        if (siteId) {
+          const siteDoc = await Site.findById(siteId).select('gaPropertyId').lean();
+          gaPropertyId = siteDoc?.gaPropertyId || null;
+        }
+
+        if (gaPropertyId) {
+          const [summaryRes, pagesRes, sourcesRes] = await Promise.allSettled([
+            gaService.getSiteSummary(gaPropertyId, 28),
+            gaService.getTopPages(gaPropertyId, 28, 15),
+            gaService.getTrafficSources(gaPropertyId, 28),
+          ]);
+
+          const summary = summaryRes.status === 'fulfilled' ? summaryRes.value : null;
+          const pages = pagesRes.status === 'fulfilled' ? pagesRes.value : null;
+          const sources = sourcesRes.status === 'fulfilled' ? sourcesRes.value : null;
+
+          if (summary?.available) {
+            const avgDurMin = Math.floor((summary.avgSessionDuration || 0) / 60);
+            const avgDurSec = Math.round((summary.avgSessionDuration || 0) % 60);
+
+            const pageLines = pages?.pages?.length
+              ? pages.pages.slice(0, 10).map((p, i) =>
+                  `  ${i + 1}. ${p.page} — ${p.sessions} sessions, ${p.pageviews} pageviews, ${p.bounceRate}% bounce, avg ${Math.floor(p.avgDuration / 60)}m ${Math.round(p.avgDuration % 60)}s`
+                ).join('\n')
+              : '  (no page data)';
+
+            const sourceLines = sources?.sources?.length
+              ? sources.sources.map((s, i) =>
+                  `  ${i + 1}. ${s.source} — ${s.sessions} sessions (${s.pct}%)`
+                ).join('\n')
+              : '  (no source data)';
+
+            gaContext = `\n\n--- GA4 DATA (Google Analytics 4 — last 28 days) ---\nSite: ${siteUrl}\nSessions: ${summary.sessions.toLocaleString()}\nUsers: ${summary.users.toLocaleString()}\nPageviews: ${summary.pageviews.toLocaleString()}\nBounce Rate: ${summary.bounceRate}%\nAvg Session Duration: ${avgDurMin}m ${avgDurSec}s\n\nTop Pages by Sessions:\n${pageLines}\n\nTraffic Sources:\n${sourceLines}\n--- END GA4 DATA ---\n\nUse the above real data to answer the user's question.`;
+          }
+        }
+      } catch { /* non-critical — proceed without GA */ }
+    }
+
     // Build user content
     const userContent = [];
     for (const att of (attachments || [])) {
@@ -425,7 +488,7 @@ exports.sendMessage = async (req, res) => {
         userContent.push({ type: 'text', text: `[Attached file: ${att.name}]` });
       }
     }
-    if (userMessage) userContent.push({ type: 'text', text: userMessage + (gscContext || '') });
+    if (userMessage) userContent.push({ type: 'text', text: userMessage + (gscContext || '') + (gaContext || '') });
 
     const claudeMessages = [
       ...(messages || []).map((m) => ({ role: m.role, content: m.content })),

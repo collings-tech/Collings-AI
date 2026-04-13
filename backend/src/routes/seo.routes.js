@@ -38,4 +38,9 @@ router.get('/gsc/:siteId/summary', seo.gscSummary);
 router.get('/gsc/:siteId/top-queries', seo.gscTopQueries);
 router.get('/gsc/:siteId/top-pages', seo.gscTopPages);
 
+// Google Analytics 4
+router.get('/ga/:siteId/summary', seo.gaSummary);
+router.get('/ga/:siteId/top-pages', seo.gaTopPages);
+router.get('/ga/:siteId/traffic-sources', seo.gaTrafficSources);
+
 module.exports = router;
