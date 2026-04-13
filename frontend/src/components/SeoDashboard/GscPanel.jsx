@@ -3,20 +3,20 @@ import apiClient from '../../api/client';
 
 function StatCard({ label, value, sub }) {
   return (
-    <div className="bg-gray-700/50 rounded-xl px-4 py-3 text-center">
+    <div className="bg-gray-700/30 rounded-xl px-4 py-3 text-center">
       <div className="text-white font-bold text-xl leading-tight">{value ?? '—'}</div>
-      <div className="text-gray-400 text-xs mt-0.5">{label}</div>
-      {sub && <div className="text-gray-500 text-xs mt-0.5">{sub}</div>}
+      <div className="text-gray-500 text-xs mt-0.5">{label}</div>
+      {sub && <div className="text-gray-600 text-[11px] mt-0.5">{sub}</div>}
     </div>
   );
 }
 
 function SkeletonRow({ cols }) {
   return (
-    <tr className="border-t border-gray-700/50">
+    <tr className="border-t border-gray-700/30">
       {Array.from({ length: cols }).map((_, i) => (
         <td key={i} className="px-4 py-3">
-          <div className="h-3 bg-gray-700 rounded animate-pulse" />
+          <div className="h-3 bg-gray-700/50 rounded animate-pulse" />
         </td>
       ))}
     </tr>
@@ -84,17 +84,21 @@ export default function GscPanel({ siteId }) {
 
   if (!loading && !available) {
     return (
-      <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-base">🔍</span>
+      <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-6">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+            <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
+          </div>
           <h3 className="text-white font-semibold text-sm">Google Search Console</h3>
         </div>
-        <p className="text-gray-500 text-sm mt-3">
+        <p className="text-gray-500 text-sm">
           Search Console is not connected for this site. Add the service account email as a verified user in your GSC property, then add{' '}
-          <code className="text-gray-300 bg-gray-700 px-1 rounded text-xs">GOOGLE_SERVICE_ACCOUNT_JSON</code> to your backend environment.
+          <code className="text-gray-300 bg-gray-700/60 px-1.5 py-0.5 rounded text-xs">GOOGLE_SERVICE_ACCOUNT_JSON</code> to your backend environment.
         </p>
         {unavailableReason && (
-          <p className="text-red-400/70 text-xs mt-2 font-mono bg-gray-900/50 px-3 py-2 rounded-lg">
+          <p className="text-red-400/70 text-xs mt-3 font-mono bg-gray-900/40 px-3 py-2 rounded-lg border border-red-500/10">
             Error: {unavailableReason}
           </p>
         )}
@@ -103,22 +107,25 @@ export default function GscPanel({ siteId }) {
   }
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
-      {/* Header */}
-      <div className="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-base">🔍</span>
+    <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-700/50 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+            <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
+          </div>
           <h3 className="text-white font-semibold text-sm">Google Search Console</h3>
         </div>
-        <div className="flex gap-1">
+        <div className="flex bg-gray-800/80 rounded-lg border border-gray-700/50 p-0.5">
           {[7, 28, 90].map((d) => (
             <button
               key={d}
               onClick={() => setDays(d)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                 days === d
-                  ? 'bg-brand-500 text-white'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'
+                  ? 'bg-brand-500 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-200'
               }`}
             >
               {d}d
@@ -127,24 +134,20 @@ export default function GscPanel({ siteId }) {
         </div>
       </div>
 
-      <div className="p-5 space-y-5">
-        {/* Summary stat cards */}
-        <div className="grid grid-cols-4 gap-3">
+      <div className="p-5 space-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-gray-700/50 rounded-xl px-4 py-3">
-                <div className="h-6 bg-gray-600 rounded animate-pulse mb-1" />
-                <div className="h-3 bg-gray-700 rounded animate-pulse w-2/3 mx-auto" />
+              <div key={i} className="bg-gray-700/30 rounded-xl px-4 py-3">
+                <div className="h-6 bg-gray-600/40 rounded animate-pulse mb-1" />
+                <div className="h-3 bg-gray-700/50 rounded animate-pulse w-2/3 mx-auto" />
               </div>
             ))
           ) : (
             <>
               <StatCard label="Clicks" value={summary?.clicks?.toLocaleString()} />
               <StatCard label="Impressions" value={summary?.impressions?.toLocaleString()} />
-              <StatCard
-                label="Avg CTR"
-                value={summary?.ctr != null ? `${summary.ctr}%` : '—'}
-              />
+              <StatCard label="Avg CTR" value={summary?.ctr != null ? `${summary.ctr}%` : '—'} />
               <StatCard
                 label="Avg Position"
                 value={summary?.position != null ? `#${summary.position}` : '—'}
@@ -154,16 +157,15 @@ export default function GscPanel({ siteId }) {
           )}
         </div>
 
-        {/* Top Queries */}
         <div>
-          <h4 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">
+          <h4 className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider mb-2">
             Top Search Queries
           </h4>
-          <div className="bg-gray-900/40 rounded-xl overflow-hidden">
+          <div className="bg-gray-900/30 rounded-xl overflow-hidden border border-gray-700/30">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-gray-500 text-xs uppercase tracking-wider border-b border-gray-700/50">
+                  <tr className="text-gray-500 text-[11px] uppercase tracking-wider border-b border-gray-700/30">
                     <th className="px-4 py-2.5 text-left font-medium">Query</th>
                     <th className="px-4 py-2.5 text-right font-medium">Clicks</th>
                     <th className="px-4 py-2.5 text-right font-medium">Impressions</th>
@@ -176,24 +178,17 @@ export default function GscPanel({ siteId }) {
                     ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
                     : queries.length > 0
                     ? queries.map((q, i) => (
-                        <tr
-                          key={i}
-                          className="border-t border-gray-700/30 hover:bg-gray-700/20 transition-colors"
-                        >
-                          <td className="px-4 py-2.5 text-gray-200 max-w-xs truncate font-mono text-xs">
-                            {q.query}
-                          </td>
+                        <tr key={i} className="border-t border-gray-700/20 hover:bg-gray-700/15 transition-colors">
+                          <td className="px-4 py-2.5 text-gray-200 max-w-xs truncate font-mono text-xs">{q.query}</td>
                           <td className="px-4 py-2.5 text-right text-gray-300">{q.clicks.toLocaleString()}</td>
-                          <td className="px-4 py-2.5 text-right text-gray-400">{q.impressions.toLocaleString()}</td>
+                          <td className="px-4 py-2.5 text-right text-gray-500">{q.impressions.toLocaleString()}</td>
                           <td className="px-4 py-2.5 text-right text-gray-300">{q.ctr}%</td>
-                          <td className={`px-4 py-2.5 text-right font-semibold ${positionColor(q.position)}`}>
-                            #{q.position}
-                          </td>
+                          <td className={`px-4 py-2.5 text-right font-semibold ${positionColor(q.position)}`}>#{q.position}</td>
                         </tr>
                       ))
                     : (
                       <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-gray-500 text-sm">
+                        <td colSpan={5} className="px-4 py-8 text-center text-gray-600 text-sm">
                           No search query data found for this site
                         </td>
                       </tr>
@@ -204,16 +199,15 @@ export default function GscPanel({ siteId }) {
           </div>
         </div>
 
-        {/* Top Pages */}
         <div>
-          <h4 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">
+          <h4 className="text-gray-400 text-[11px] font-semibold uppercase tracking-wider mb-2">
             Top Pages by Impressions
           </h4>
-          <div className="bg-gray-900/40 rounded-xl overflow-hidden">
+          <div className="bg-gray-900/30 rounded-xl overflow-hidden border border-gray-700/30">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-gray-500 text-xs uppercase tracking-wider border-b border-gray-700/50">
+                  <tr className="text-gray-500 text-[11px] uppercase tracking-wider border-b border-gray-700/30">
                     <th className="px-4 py-2.5 text-left font-medium">Page</th>
                     <th className="px-4 py-2.5 text-right font-medium">Impressions</th>
                     <th className="px-4 py-2.5 text-right font-medium">Clicks</th>
@@ -226,27 +220,19 @@ export default function GscPanel({ siteId }) {
                     ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} cols={5} />)
                     : pages.length > 0
                     ? pages.slice(0, 20).map((p, i) => (
-                        <tr
-                          key={i}
-                          className="border-t border-gray-700/30 hover:bg-gray-700/20 transition-colors"
-                        >
-                          <td
-                            className="px-4 py-2.5 text-gray-200 font-mono text-xs max-w-xs truncate"
-                            title={p.page}
-                          >
+                        <tr key={i} className="border-t border-gray-700/20 hover:bg-gray-700/15 transition-colors">
+                          <td className="px-4 py-2.5 text-gray-200 font-mono text-xs max-w-xs truncate" title={p.page}>
                             {truncatePage(p.page)}
                           </td>
                           <td className="px-4 py-2.5 text-right text-gray-300">{p.impressions.toLocaleString()}</td>
-                          <td className="px-4 py-2.5 text-right text-gray-400">{p.clicks.toLocaleString()}</td>
+                          <td className="px-4 py-2.5 text-right text-gray-500">{p.clicks.toLocaleString()}</td>
                           <td className="px-4 py-2.5 text-right text-gray-300">{p.ctr}%</td>
-                          <td className={`px-4 py-2.5 text-right font-semibold ${positionColor(p.position)}`}>
-                            #{p.position}
-                          </td>
+                          <td className={`px-4 py-2.5 text-right font-semibold ${positionColor(p.position)}`}>#{p.position}</td>
                         </tr>
                       ))
                     : (
                       <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-gray-500 text-sm">
+                        <td colSpan={5} className="px-4 py-8 text-center text-gray-600 text-sm">
                           No page data found for this site
                         </td>
                       </tr>

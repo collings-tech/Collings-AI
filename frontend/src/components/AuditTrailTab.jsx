@@ -529,7 +529,7 @@ export default function AuditTrailTab() {
         <button
           onClick={handleRefresh}
           disabled={isLoading || !selectedSiteId}
-          className="flex items-center gap-1.5 px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-40 rounded-xl transition-all text-sm border border-gray-700 hover:border-gray-600"
+          className="flex items-center gap-1.5 px-3 py-2 text-gray-500 hover:text-white hover:bg-gray-800 disabled:opacity-40 rounded-lg transition-all text-sm border border-gray-700/50"
         >
           <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -548,7 +548,7 @@ export default function AuditTrailTab() {
           <select
             value={selectedSiteId}
             onChange={(e) => handleSiteChange(e.target.value)}
-            className="bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            className="bg-gray-800/60 border border-gray-700/50 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
           >
             {sites.length === 0 && <option value="">No sites connected</option>}
             {sites.map((s) => (
@@ -560,13 +560,13 @@ export default function AuditTrailTab() {
         </div>
 
         {/* Filter pills */}
-        <div className="flex bg-gray-900 rounded-xl border border-gray-700 p-0.5 gap-0.5">
+        <div className="flex bg-gray-800/50 rounded-xl border border-gray-700/40 p-0.5 gap-0.5">
           {FILTER_OPTIONS.map(({ id, label }) => (
             <button
               key={id}
               onClick={() => setFilter(id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                filter === id ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-white'
+                filter === id ? 'bg-gray-700/80 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
               {label}
@@ -585,7 +585,7 @@ export default function AuditTrailTab() {
 
       {/* No sites */}
       {sites.length === 0 && (
-        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-10 text-center">
+        <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-10 text-center">
           <p className="text-gray-500 text-sm">No sites connected yet. Add a site to start seeing audit logs.</p>
         </div>
       )}
@@ -599,9 +599,9 @@ export default function AuditTrailTab() {
 
       {/* Main log panel */}
       {selectedSiteId && (
-        <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
+        <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl overflow-hidden">
           {/* Panel header */}
-          <div className="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-gray-700/50 flex items-center justify-between">
             <div>
               <h3 className="text-white font-semibold text-sm">
                 {selectedSite?.label || 'Site'} — Activity Log
@@ -663,7 +663,7 @@ export default function AuditTrailTab() {
 
           {/* Pagination — only for optimizations / all */}
           {filter !== 'jobs' && logsTotalPages > 1 && (
-            <div className="px-5 py-4 border-t border-gray-700 flex items-center justify-between">
+            <div className="px-5 py-4 border-t border-gray-700/50 flex items-center justify-between">
               <p className="text-xs text-gray-500">
                 Page {logsPage} of {logsTotalPages} · {logsTotal} optimization{logsTotal !== 1 ? 's' : ''}
               </p>
@@ -723,8 +723,8 @@ export default function AuditTrailTab() {
 
 function StatCard({ label, value, icon, color }) {
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-2xl px-4 py-3.5 flex items-center gap-3">
-      <div className={`${color} opacity-70`}>{icon}</div>
+    <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl px-4 py-3.5 flex items-center gap-3">
+      <div className={`${color} opacity-60`}>{icon}</div>
       <div>
         <p className={`text-lg font-bold ${color}`}>{value}</p>
         <p className="text-gray-500 text-xs leading-tight">{label}</p>

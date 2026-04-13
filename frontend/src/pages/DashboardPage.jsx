@@ -22,15 +22,16 @@ const TABS = [
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   )},
-  { id: 'settings', label: 'Settings', icon: (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  )},
+ 
   { id: 'audit-trail', label: 'Audit Trail', icon: (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+  )},
+   { id: 'settings', label: 'Settings', icon: (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   )},
 ];
@@ -137,7 +138,7 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
     <div className={`min-h-screen flex flex-col ${isDark ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`}>
 
       {/* Top bar */}
-      <header className={`backdrop-blur-md border-b px-6 py-3.5 flex items-center justify-between sticky top-0 z-10 ${isDark ? 'bg-gray-800/80 border-gray-700' : 'bg-white/90 border-gray-200'}`}>
+      <header className={`backdrop-blur-xl border-b px-6 py-3.5 flex items-center justify-between sticky top-0 z-20 ${isDark ? 'bg-gray-900/80 border-gray-800/80' : 'bg-white/90 border-gray-200'}`}>
         <div className="flex items-center gap-3">
           <img src={isDark ? '/collings-logo-white.png' : '/collings-logo-1.png'} alt="Collings AI" className="h-7 w-auto" />
         </div>
@@ -146,12 +147,12 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
           {hasSeoData && (
             <button
               onClick={onSeoReports}
-              className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-700/60 rounded-xl border border-gray-600/50 text-xs hover:border-brand-500/50 transition-all cursor-pointer"
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-800/60 rounded-lg border border-gray-700/50 text-xs hover:border-brand-500/40 transition-all cursor-pointer"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-gray-300">SEO Bot active</span>
+              <span className="text-gray-400">SEO Bot active</span>
               {totalAttention > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-md font-semibold">
+                <span className="ml-1 px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded-md font-semibold border border-amber-500/20">
                   {totalAttention} need attention
                 </span>
               )}
@@ -165,7 +166,7 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
           </div>
           <button
             onClick={() => setShowLogoutConfirm(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-sm border border-transparent ${isDark ? 'text-gray-400 hover:text-white hover:bg-gray-700 hover:border-gray-600' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 hover:border-gray-300'}`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-sm border ${isDark ? 'text-gray-500 hover:text-white hover:bg-gray-800 border-gray-700/50' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 border-gray-200'}`}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -176,29 +177,29 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
       </header>
 
       {/* Tab bar */}
-      <div className={`border-b px-6 ${isDark ? 'bg-gray-800/60 border-gray-700' : 'bg-white border-gray-200'}`}>
-        <div className="flex gap-1 max-w-6xl mx-auto">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => tab.id === 'seo-reports' ? onSeoReports() : setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-all duration-150 ${
-                activeTab === tab.id
-                  ? 'border-brand-500 text-brand-500'
-                  : isDark
-                  ? 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-500'
-                  : 'border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-400'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
+      <div className={`px-6 py-3 ${isDark ? 'border-b border-gray-800/60' : 'border-b border-gray-200 bg-gray-50'}`}>
+        <div className="max-w-6xl mx-auto">
+          <div className={`inline-flex items-center gap-1 p-1 rounded-xl ${isDark ? 'bg-gray-800/50 border border-gray-700/40' : 'bg-white border border-gray-200'}`}>
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => tab.id === 'seo-reports' ? onSeoReports() : setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === tab.id
+                    ? isDark ? 'bg-gray-700/80 text-white shadow-sm' : 'bg-brand-500 text-white shadow-sm'
+                    : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-700'
+                }`}
+              >
+                {tab.icon}
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Tab content */}
-      <main className="flex-1 p-6 max-w-6xl mx-auto w-full">
+      <main className="flex-1 px-6 py-8 max-w-6xl mx-auto w-full">
 
         {/* DASHBOARD TAB */}
         {activeTab === 'dashboard' && (
@@ -232,26 +233,26 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
             )}
 
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="bg-gray-800 border border-gray-700 rounded-2xl p-5 animate-pulse">
-                    <div className="w-10 h-10 bg-gray-700 rounded-xl mb-3" />
-                    <div className="h-4 bg-gray-700 rounded w-3/4 mb-2" />
-                    <div className="h-3 bg-gray-700 rounded w-1/2 mb-4" />
-                    <div className="h-16 bg-gray-700 rounded mb-3" />
-                    <div className="h-3 bg-gray-700 rounded w-2/3" />
+                  <div key={i} className="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5 animate-pulse">
+                    <div className="w-10 h-10 bg-gray-700/50 rounded-xl mb-3" />
+                    <div className="h-4 bg-gray-700/50 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-gray-700/40 rounded w-1/2 mb-4" />
+                    <div className="h-16 bg-gray-700/30 rounded mb-3" />
+                    <div className="h-3 bg-gray-700/40 rounded w-2/3" />
                   </div>
                 ))}
               </div>
             ) : sites.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center">
-                <div className="w-20 h-20 bg-gray-800 border border-gray-700 rounded-3xl flex items-center justify-center mb-5 shadow-xl">
-                  <svg className="w-10 h-10 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="flex flex-col items-center justify-center py-32 text-center">
+                <div className="w-16 h-16 bg-gray-800/50 border border-gray-700/50 rounded-2xl flex items-center justify-center mb-5">
+                  <svg className="w-7 h-7 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-300 mb-2">No sites yet</h3>
-                <p className="text-gray-500 text-sm max-w-sm mb-6">Connect your first WordPress site to start managing it with AI.</p>
+                <h3 className="text-lg font-semibold text-gray-300 mb-1">No sites yet</h3>
+                <p className="text-gray-600 text-sm max-w-sm mb-6">Connect your first WordPress site to start managing it with AI.</p>
                 <button
                   onClick={() => setShowAddModal(true)}
                   className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-brand-900/40"
@@ -263,7 +264,7 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {sites.map((site) => {
                   const siteId = String(site._id || site.id);
                   return (
@@ -279,14 +280,14 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
                 })}
                 <button
                   onClick={() => setShowAddModal(true)}
-                  className="group bg-gray-800/50 border-2 border-dashed border-gray-700 hover:border-brand-500 rounded-2xl p-5 flex flex-col items-center justify-center gap-2 transition-all duration-200 cursor-pointer min-h-[160px] hover:bg-gray-800"
+                  className="group bg-transparent border-2 border-dashed border-gray-700/50 hover:border-brand-500/50 rounded-2xl p-5 flex flex-col items-center justify-center gap-2.5 transition-all duration-200 cursor-pointer min-h-[160px] hover:bg-gray-800/30"
                 >
-                  <div className="w-10 h-10 bg-gray-700 group-hover:bg-brand-900/60 rounded-xl flex items-center justify-center transition-colors">
-                    <svg className="w-5 h-5 text-gray-500 group-hover:text-brand-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="w-10 h-10 bg-gray-800/50 group-hover:bg-brand-900/40 rounded-xl flex items-center justify-center transition-colors border border-gray-700/50 group-hover:border-brand-700/40">
+                    <svg className="w-5 h-5 text-gray-600 group-hover:text-brand-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                   </div>
-                  <span className="text-gray-500 group-hover:text-brand-400 text-sm font-medium transition-colors">Add New Site</span>
+                  <span className="text-gray-600 group-hover:text-brand-400 text-sm font-medium transition-colors">Add New Site</span>
                 </button>
               </div>
             )}
@@ -309,7 +310,7 @@ export default function DashboardPage({ onSelectSite, onLogout, onSeoReports }) 
 
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className={`w-full max-w-sm mx-4 rounded-2xl border p-6 shadow-2xl ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+          <div className={`w-full max-w-sm mx-4 rounded-2xl border p-6 shadow-2xl ${isDark ? 'bg-gray-800/95 backdrop-blur-xl border-gray-700/50' : 'bg-white border-gray-200'}`}>
             <h3 className={`text-base font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>Sign out?</h3>
             <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>You'll need to sign in again to access your account.</p>
             <div className="flex gap-3 justify-end">
@@ -348,8 +349,8 @@ function Section({ title, children }) {
 
 function InfoCard({ number, title, children }) {
   return (
-    <div className="flex gap-4 py-5 border-b border-gray-700 last:border-0">
-      <div className="flex-shrink-0 w-8 h-8 bg-brand-900/70 border border-brand-700/40 rounded-xl flex items-center justify-center text-brand-400 font-bold text-sm">
+    <div className="flex gap-4 py-5 border-b border-gray-700/40 last:border-0">
+      <div className="flex-shrink-0 w-8 h-8 bg-brand-900/50 border border-brand-700/30 rounded-lg flex items-center justify-center text-brand-400 font-bold text-sm">
         {number}
       </div>
       <div>
@@ -474,7 +475,7 @@ function HowItWorksTab() {
 
       <Section title="1. How Collings AI Works">
         <CollingAIFlowAnim />
-        <div className="bg-gray-800/60 border border-gray-700 rounded-2xl p-6 space-y-1">
+        <div className="bg-gray-800/40 border border-gray-700/40 rounded-2xl p-6 space-y-1">
           <InfoCard number="1" title="You type a plain-English instruction">
             <p>No buttons or forms — just type what you want: <em className="text-gray-300">"Write a 500-word post about kitchen renovation tips"</em> or <em className="text-gray-300">"Update the homepage meta description"</em>.</p>
           </InfoCard>
@@ -491,7 +492,7 @@ function HowItWorksTab() {
       </Section>
 
       <Section title="2. How to Add a Site">
-        <div className="bg-gray-800/60 border border-gray-700 rounded-2xl p-6 space-y-1">
+        <div className="bg-gray-800/40 border border-gray-700/40 rounded-2xl p-6 space-y-1">
           <InfoCard number="1" title='Click "Add New Site" on the Dashboard'>
             <p>You'll find the button in the top-right corner of the Dashboard tab.</p>
           </InfoCard>
@@ -508,7 +509,7 @@ function HowItWorksTab() {
           </InfoCard>
         </div>
 
-        <div className="mt-4 bg-red-900/10 border border-red-700/30 rounded-2xl p-5 space-y-4">
+        <div className="mt-4 bg-red-500/5 border border-red-500/15 rounded-2xl p-5 space-y-4">
           <div className="flex items-start gap-3">
             <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -542,7 +543,7 @@ function HowItWorksTab() {
       </Section>
 
       <Section title="3. Tutorial: Using the Full System">
-        <div className="bg-gray-800/60 border border-gray-700 rounded-2xl p-6 space-y-1">
+        <div className="bg-gray-800/40 border border-gray-700/40 rounded-2xl p-6 space-y-1">
           <InfoCard number="1" title="Create content by chatting">
             <p>Select a site card, then type your instruction. Examples:</p>
             <ul className="list-disc list-inside mt-1 space-y-0.5 text-gray-400">
@@ -568,7 +569,7 @@ function HowItWorksTab() {
 
       <Section title="4. How the SEO AI Works">
         <SEOBotFlowAnim />
-        <div className="bg-gray-800/60 border border-gray-700 rounded-2xl p-6 space-y-1">
+        <div className="bg-gray-800/40 border border-gray-700/40 rounded-2xl p-6 space-y-1">
           <InfoCard number="1" title="Every post gets an SEO score (0–100)">
             <p>The SEO Bot scores each post across 9 checks: keyword in title, meta description, first paragraph, title length, description length, keyword density, internal links, H2 headings, and word count.</p>
           </InfoCard>
@@ -585,7 +586,7 @@ function HowItWorksTab() {
       </Section>
 
       <Section title="5. SEO Bot Schedule">
-        <div className="bg-gray-800/60 border border-gray-700 rounded-2xl overflow-hidden">
+        <div className="bg-gray-800/40 border border-gray-700/40 rounded-2xl overflow-hidden">
           <div className="grid grid-cols-[auto_auto_1fr] gap-x-4 px-5 py-2.5 border-b border-gray-700 bg-gray-800/50">
             <span className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Cycle</span>
             <span className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Frequency</span>
@@ -597,7 +598,7 @@ function HowItWorksTab() {
             { cycle: 'Low priority',    freq: 'Every hour',    dot: 'bg-emerald-500', desc: 'Posts scoring 60–79 (Needs work) — optimised gradually over time.' },
             { cycle: 'Nightly sweep',   freq: '2:00 AM daily', dot: 'bg-brand-400',   desc: 'Scans every published post & page (up to 200 each), scores them all, and queues anything below 80.' },
           ].map((row, i) => (
-            <div key={i} className="grid grid-cols-[auto_auto_1fr] gap-x-4 items-start px-5 py-3.5 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/20 transition-colors">
+            <div key={i} className="grid grid-cols-[auto_auto_1fr] gap-x-4 items-start px-5 py-3.5 border-b border-gray-700/50/50 last:border-0 hover:bg-gray-700/20 transition-colors">
               <div className="flex items-center gap-2 whitespace-nowrap self-center">
                 <span className={`w-2.5 h-2.5 rounded-full ${row.dot} flex-shrink-0`} />
                 <span className="text-white text-sm font-medium">{row.cycle}</span>
@@ -607,7 +608,7 @@ function HowItWorksTab() {
             </div>
           ))}
         </div>
-        <div className="mt-4 bg-amber-900/20 border border-amber-700/30 rounded-2xl p-5 space-y-3">
+        <div className="mt-4 bg-amber-500/5 border border-amber-500/15 rounded-2xl p-5 space-y-3">
           <div className="flex items-start gap-3">
             <svg className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <div>
@@ -623,7 +624,7 @@ function HowItWorksTab() {
       </Section>
 
       <Section title="6. SEO Improvement Guide">
-        <div className="bg-gray-800/60 border border-gray-700 rounded-2xl overflow-hidden">
+        <div className="bg-gray-800/40 border border-gray-700/40 rounded-2xl overflow-hidden">
           <div className="flex items-center gap-5 px-5 py-3 border-b border-gray-700 bg-gray-800/80">
             <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide">Impact</span>
             <span className="flex items-center gap-1.5 text-xs text-gray-300"><span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" /> High</span>
@@ -653,7 +654,7 @@ function HowItWorksTab() {
             const dot = row.impact === 'high' ? 'bg-red-500' : row.impact === 'medium' ? 'bg-amber-400' : 'bg-emerald-500';
             const catColor = row.category === 'Content' ? 'text-brand-300' : row.category === 'On-page' ? 'text-brand-400' : row.category === 'Off-page' ? 'text-sky-400' : 'text-teal-400';
             return (
-              <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 items-start px-5 py-3.5 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/20 transition-colors">
+              <div key={i} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 items-start px-5 py-3.5 border-b border-gray-700/50/50 last:border-0 hover:bg-gray-700/20 transition-colors">
                 <div>
                   <p className="text-white text-sm font-medium">{row.action}</p>
                   <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">{row.how}</p>
@@ -665,7 +666,7 @@ function HowItWorksTab() {
             );
           })}
         </div>
-        <div className="mt-4 bg-brand-950/40 border border-brand-700/20 rounded-2xl p-5">
+        <div className="mt-4 bg-brand-500/5 border border-brand-500/15 rounded-2xl p-5">
           <p className="text-brand-300 text-xs font-semibold uppercase tracking-wide mb-3">Key Takeaways</p>
           <ul className="space-y-2">
             {[
@@ -839,7 +840,7 @@ function SettingsTab({ user, setUser }) {
         <p className="text-gray-400 text-sm mt-0.5">Manage your profile.</p>
       </div>
 
-      <div className="flex items-center gap-4 bg-gray-800/60 border border-gray-700 rounded-2xl p-5">
+      <div className="flex items-center gap-4 bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5">
         <div className="w-14 h-14 bg-gradient-to-br from-brand-400 to-brand-600 rounded-full flex items-center justify-center text-white text-lg font-bold shadow-md flex-shrink-0">
           {initials}
         </div>
@@ -849,8 +850,8 @@ function SettingsTab({ user, setUser }) {
         </div>
       </div>
 
-      <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-700">
+      <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-gray-700/50">
           <h3 className="text-white font-semibold text-sm">Appearance</h3>
         </div>
         <div className="p-5 flex items-center justify-between">
@@ -862,8 +863,8 @@ function SettingsTab({ user, setUser }) {
         </div>
       </div>
 
-      <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-700">
+      <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-gray-700/50">
           <h3 className="text-white font-semibold text-sm">Change Name</h3>
         </div>
         <div className="p-5 space-y-4">
@@ -890,8 +891,8 @@ function SettingsTab({ user, setUser }) {
       </div>
 
       {/* SEO Bot */}
-      <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-700">
+      <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-gray-700/50">
           <h3 className="text-white font-semibold text-sm">SEO Bot</h3>
         </div>
         <div className="p-5 space-y-4">
@@ -957,8 +958,8 @@ function SettingsTab({ user, setUser }) {
       </div>
 
       {/* Google Integrations */}
-      <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-700">
+      <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-gray-700/50">
           <h3 className="text-white font-semibold text-sm">Google Integrations</h3>
         </div>
         <div className="p-5 space-y-4">
@@ -1022,8 +1023,8 @@ function SettingsTab({ user, setUser }) {
         </div>
       </div>
 
-      <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-700">
+      <div className="bg-gray-800/50 border border-gray-700/50 rounded-2xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-gray-700/50">
           <h3 className="text-white font-semibold text-sm">Change Password</h3>
         </div>
         <div className="p-5 space-y-4">

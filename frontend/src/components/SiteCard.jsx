@@ -375,10 +375,10 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
   return (
     <div
       onClick={() => onSelect(site)}
-      className="group relative bg-gray-800 border border-gray-700 hover:border-brand-500 rounded-2xl cursor-pointer transition-all duration-200 hover:shadow-xl hover:shadow-brand-900/20 hover:-translate-y-0.5 overflow-hidden flex flex-col"
+      className="group relative bg-gray-800/50 border border-gray-700/50 hover:border-gray-500 rounded-2xl cursor-pointer transition-all duration-200 hover:shadow-xl hover:shadow-black/20 hover:-translate-y-0.5 overflow-hidden flex flex-col"
     >
       <div className="p-5 pb-3 flex items-start gap-3">
-        <div className="w-10 h-10 bg-brand-900/60 rounded-xl flex items-center justify-center border border-brand-700/40 flex-shrink-0 mt-0.5">
+        <div className="w-10 h-10 bg-brand-900/40 rounded-xl flex items-center justify-center border border-brand-700/30 flex-shrink-0 mt-0.5">
           <svg className="w-5 h-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
           </svg>
@@ -406,7 +406,7 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
 
       {hasSeoData ? (
         <>
-          <div className="mx-5 border-t border-gray-700/60" />
+          <div className="mx-5 border-t border-gray-700/40" />
           <div className="px-5 py-3 flex items-center gap-4">
             <ScoreRing score={avgScore ?? null} />
             <div className="flex-1 min-w-0">
@@ -426,20 +426,20 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
           </div>
 
           <div className="px-5 pb-3 grid grid-cols-3 gap-2">
-            <div className="bg-gray-700/40 rounded-xl px-2 py-2 text-center">
+            <div className="bg-gray-700/30 rounded-xl px-2 py-2 text-center">
               <div className="text-white font-bold text-base leading-none mb-1">{postsOptimized ?? 0}</div>
               <div className="text-gray-500 text-xs leading-tight">Optimized</div>
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); if (attentionCount > 0) setShowAttention((v) => !v); }}
-              className={`rounded-xl px-2 py-2 text-center transition-all ${attentionCount > 0 ? 'bg-amber-900/30 hover:bg-amber-900/50 cursor-pointer' : 'bg-gray-700/40 cursor-default'}`}
+              className={`rounded-xl px-2 py-2 text-center transition-all ${attentionCount > 0 ? 'bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 cursor-pointer' : 'bg-gray-700/30 cursor-default'}`}
             >
               <div className={`font-bold text-base leading-none mb-1 ${attentionCount > 0 ? 'text-amber-400' : 'text-white'}`}>{attentionCount ?? 0}</div>
-              <div className={`text-xs leading-tight ${attentionCount > 0 ? 'text-amber-600' : 'text-gray-500'}`}>
+              <div className={`text-xs leading-tight ${attentionCount > 0 ? 'text-amber-500' : 'text-gray-500'}`}>
                 Attention {attentionCount > 0 && <span>{showAttention ? '▲' : '▼'}</span>}
               </div>
             </button>
-            <div className="bg-gray-700/40 rounded-xl px-2 py-2 text-center">
+            <div className="bg-gray-700/30 rounded-xl px-2 py-2 text-center">
               <div className="text-gray-300 font-bold text-xs leading-none mb-1 truncate">{formatTimeAgo(lastBotRun) || '—'}</div>
               <div className="text-gray-500 text-xs leading-tight">Last ran</div>
             </div>
@@ -447,14 +447,14 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
 
           {gscSummary && (
             <div className="px-5 pb-2">
-              <div className="bg-gray-700/30 rounded-xl px-3 py-2 flex items-center gap-1.5 text-xs">
-                <svg className="w-3 h-3 text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl px-3 py-2 flex items-center gap-1.5 text-xs">
+                <svg className="w-3 h-3 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <span className="text-gray-500">Search Console:</span>
+                <span className="text-gray-500">GSC:</span>
                 <span className="text-gray-300 font-medium">{(gscSummary.clicks || 0).toLocaleString()} clicks</span>
-                <span className="text-gray-600">·</span>
-                <span className="text-gray-400">avg pos #{gscSummary.position}</span>
+                <span className="text-gray-700">·</span>
+                <span className="text-gray-400">pos #{gscSummary.position}</span>
                 <span className="text-gray-600 ml-auto">28d</span>
               </div>
             </div>
