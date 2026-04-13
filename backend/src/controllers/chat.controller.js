@@ -5,6 +5,27 @@ const axios = require('axios');
 const { ANTHROPIC_API_KEY } = require('../config/env');
 const ChatHistory = require('../models/ChatHistory');
 const SeoJob = require('../models/SeoJob');
+const gscService = require('../seo-bot/gscService');
+const Site = require('../models/Site');
+
+// ---------------------------------------------------------------------------
+// GSC question detector
+// ---------------------------------------------------------------------------
+
+const GSC_KEYWORDS = [
+  'traffic', 'clicks', 'impressions', 'ctr', 'click through',
+  'ranking', 'rankings', 'rank', 'position', 'positions',
+  'search queries', 'keywords ranking', 'top queries', 'top keywords',
+  'search console', 'google search', 'organic', 'organic traffic',
+  'top pages', 'best performing', 'most visited', 'pageviews',
+  'how many visitors', 'how many clicks', 'how is the site performing',
+  'site performance', 'search performance', 'seo performance',
+];
+
+function isGscQuestion(message) {
+  const lower = message.toLowerCase();
+  return GSC_KEYWORDS.some((kw) => lower.includes(kw));
+}
 
 // ---------------------------------------------------------------------------
 // System prompt builder
@@ -76,6 +97,9 @@ Use the special internal endpoint that paginates through ALL posts automatically
 The system will return: totalPostsScanned, totalWithKeywords, uniqueKeywords (array), and posts (array with id, title, link, focusKeyword, metaTitle, metaDescription, type).
 Use this data to give a complete answer. Do NOT emit any further wpAction blocks after this.
 Note: Rank Math's Rank Tracker (Google search ranking history) is a separate cloud feature not available via REST API.
+
+## GOOGLE SEARCH CONSOLE DATA
+When the user asks about traffic, clicks, impressions, search rankings, keyword positions, CTR, top pages, top queries, or anything related to how the site performs in Google Search — the system will automatically inject real Google Search Console data into the conversation as a "GSC DATA" block BEFORE your response. When you see this block, use it to answer the question directly and accurately. Do NOT say you cannot access traffic data — the data is provided to you in the message.
 
 Always confirm what action was taken and provide relevant details.
 If an action fails, explain the error clearly and suggest a fix.`;
@@ -350,6 +374,47 @@ exports.sendMessage = async (req, res) => {
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
     const systemPrompt = buildSystemPrompt({ siteUrl, wpUsername, wpAppPassword, detectedSeoPlugin: detectedSeoPlugin || 'none' });
 
+    // Pre-fetch GSC data if the question is about traffic/rankings
+    let gscContext = null;
+    if (userMessage && gscService.isGscConfigured() && isGscQuestion(userMessage)) {
+      try {
+        // Look up the site record to get gscProperty override if set
+        let gscProperty = null;
+        if (siteId) {
+          const siteDoc = await Site.findById(siteId).select('gscProperty').lean();
+          gscProperty = siteDoc?.gscProperty || null;
+        }
+
+        const [summaryRes, queriesRes, pagesRes] = await Promise.allSettled([
+          gscService.getSiteSummary(siteUrl, gscProperty, 28),
+          gscService.getTopQueriesSite(siteUrl, gscProperty, 28, 20),
+          gscService.getTopPages(siteUrl, gscProperty, 28, 20),
+        ]);
+
+        const summary = summaryRes.status === 'fulfilled' ? summaryRes.value : null;
+        const queries = queriesRes.status === 'fulfilled' ? queriesRes.value : null;
+        const pages = pagesRes.status === 'fulfilled' ? pagesRes.value : null;
+
+        if (summary?.available) {
+          const queryLines = queries?.queries?.length
+            ? queries.queries.slice(0, 15).map((q, i) =>
+                `  ${i + 1}. "${q.query}" — ${q.clicks} clicks, ${q.impressions} impressions, pos #${q.position}, CTR ${q.ctr}%`
+              ).join('\n')
+            : '  (no query data)';
+
+          const pageLines = pages?.pages?.length
+            ? pages.pages.slice(0, 10).map((p, i) => {
+                let path = p.page;
+                try { path = new URL(p.page).pathname; } catch {}
+                return `  ${i + 1}. ${path} — ${p.impressions} impressions, ${p.clicks} clicks, pos #${p.position}, CTR ${p.ctr}%`;
+              }).join('\n')
+            : '  (no page data)';
+
+          gscContext = `\n\n--- GSC DATA (Google Search Console — last 28 days) ---\nSite: ${siteUrl}\nTotal Clicks: ${summary.clicks.toLocaleString()}\nTotal Impressions: ${summary.impressions.toLocaleString()}\nAvg CTR: ${summary.ctr}%\nAvg Position: #${summary.position}\n\nTop Search Queries:\n${queryLines}\n\nTop Pages by Impressions:\n${pageLines}\n--- END GSC DATA ---\n\nUse the above real data to answer the user's question.`;
+        }
+      } catch { /* non-critical — proceed without GSC */ }
+    }
+
     // Build user content
     const userContent = [];
     for (const att of (attachments || [])) {
@@ -360,7 +425,7 @@ exports.sendMessage = async (req, res) => {
         userContent.push({ type: 'text', text: `[Attached file: ${att.name}]` });
       }
     }
-    if (userMessage) userContent.push({ type: 'text', text: userMessage });
+    if (userMessage) userContent.push({ type: 'text', text: userMessage + (gscContext || '') });
 
     const claudeMessages = [
       ...(messages || []).map((m) => ({ role: m.role, content: m.content })),

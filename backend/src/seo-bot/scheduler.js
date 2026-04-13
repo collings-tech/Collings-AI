@@ -16,6 +16,7 @@ const { scorePost, simulateScore } = require('./seoScorer');
 const { optimizePost, generateImageAltText } = require('./seoOptimizer');
 const { writeSeoMeta, wpRequest, fixImageAltText } = require('./pluginWriter');
 const logger = require('./logger');
+const gscService = require('./gscService');
 
 const MAX_JOBS_PER_CYCLE = parseInt(process.env.MAX_JOBS_PER_CYCLE || '10', 10);
 const SEO_REWRITE_THRESHOLD = parseInt(process.env.SEO_REWRITE_THRESHOLD || '60', 10);
@@ -201,6 +202,7 @@ async function processQueue(priorityFilter) {
           creds,
           seoPlugin: config.seoPlugin || 'none',
           rewriteThreshold: config.scoreThresholdRewrite || SEO_REWRITE_THRESHOLD,
+          site,
         });
       }
 
@@ -278,7 +280,7 @@ async function processImageJob(job, { creds }) {
 // Post / page job
 // ---------------------------------------------------------------------------
 
-async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
+async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
   // Dispatch image jobs to separate handler
   if (job.postType === 'image') {
     return processImageJob(job, { creds });
@@ -324,8 +326,23 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold }) {
       });
     } catch { /* non-critical */ }
 
-    // 4. Ask Claude
-    const optimized = await optimizePost(post, currentSeoMeta, seoPlugin, otherPosts || [], scoreBefore, rewriteThreshold);
+    // 4. Fetch GSC data for this specific page (non-critical, graceful degradation)
+    let gscData = null;
+    if (gscService.isGscConfigured()) {
+      try {
+        const pageUrl = post.link || `${creds.siteUrl}/?p=${job.postId}`;
+        const gscResult = await gscService.getTopQueriesForPage(creds.siteUrl, pageUrl, site.gscProperty);
+        if (gscResult.available && gscResult.queries.length > 0) {
+          gscData = gscResult;
+          logger.info('processJob: fetched GSC queries', { postId: job.postId, queryCount: gscResult.queries.length });
+        }
+      } catch (err) {
+        logger.warn('processJob: GSC fetch failed (non-critical)', { postId: job.postId, err: err.message });
+      }
+    }
+
+    // 5. Ask Claude (with optional GSC data)
+    const optimized = await optimizePost(post, currentSeoMeta, seoPlugin, otherPosts || [], scoreBefore, rewriteThreshold, gscData);
 
     // 4b. Simulate the score with the new values before touching WordPress.
     // If the optimized values would not improve the score, skip writing entirely.

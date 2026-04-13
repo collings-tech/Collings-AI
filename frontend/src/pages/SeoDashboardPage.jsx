@@ -6,6 +6,7 @@ import SeoActivityBarChart from '../components/SeoDashboard/SeoActivityBarChart'
 import SeoTopImprovedTable from '../components/SeoDashboard/SeoTopImprovedTable';
 import SeoAttentionTable from '../components/SeoDashboard/SeoAttentionTable';
 import SeoActivityFeed from '../components/SeoDashboard/SeoActivityFeed';
+import GscPanel from '../components/SeoDashboard/GscPanel';
 import client from '../api/client';
 
 const DATE_RANGES = [
@@ -174,6 +175,8 @@ export default function SeoDashboardPage({ onBack }) {
             </div>
 
             <SeoActivityFeed logs={feedLogs} loading={loading.feed} />
+
+            <GscPanel siteId={selectedSite?.siteId} />
           </div>
         )}
       </main>

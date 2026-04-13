@@ -4,6 +4,7 @@ const Site = require('../models/Site');
 const SeoJob = require('../models/SeoJob');
 const SeoLog = require('../models/SeoLog');
 const SeoSiteConfig = require('../models/SeoSiteConfig');
+const gscService = require('../seo-bot/gscService');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -449,6 +450,50 @@ exports.getAttention = async (req, res, next) => {
     }));
 
     res.json({ posts });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Google Search Console
+// ---------------------------------------------------------------------------
+
+exports.gscSummary = async (req, res, next) => {
+  try {
+    const site = await verifySiteOwnership(req.params.siteId, req.user.id);
+    if (!site) return res.status(404).json({ message: 'Site not found' });
+
+    const days = Math.min(90, Math.max(1, parseInt(req.query.days || '28', 10)));
+    const data = await gscService.getSiteSummary(site.siteUrl, site.gscProperty, days);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.gscTopQueries = async (req, res, next) => {
+  try {
+    const site = await verifySiteOwnership(req.params.siteId, req.user.id);
+    if (!site) return res.status(404).json({ message: 'Site not found' });
+
+    const days = Math.min(90, Math.max(1, parseInt(req.query.days || '28', 10)));
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '20', 10)));
+    const data = await gscService.getTopQueriesSite(site.siteUrl, site.gscProperty, days, limit);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.gscTopPages = async (req, res, next) => {
+  try {
+    const site = await verifySiteOwnership(req.params.siteId, req.user.id);
+    if (!site) return res.status(404).json({ message: 'Site not found' });
+
+    const days = Math.min(90, Math.max(1, parseInt(req.query.days || '28', 10)));
+    const data = await gscService.getTopPages(site.siteUrl, site.gscProperty, days);
+    res.json(data);
   } catch (err) {
     next(err);
   }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -108,6 +109,28 @@ const markdownComponents = {
       </a>
     );
   },
+  table({ children }) {
+    return (
+      <div className="my-3 overflow-x-auto rounded-xl border border-gray-600/50">
+        <table className="w-full text-sm border-collapse">{children}</table>
+      </div>
+    );
+  },
+  thead({ children }) {
+    return <thead className="bg-gray-800 border-b border-gray-600/50">{children}</thead>;
+  },
+  tbody({ children }) {
+    return <tbody>{children}</tbody>;
+  },
+  tr({ children }) {
+    return <tr className="border-b border-gray-700/40 last:border-0 hover:bg-gray-700/20 transition-colors">{children}</tr>;
+  },
+  th({ children }) {
+    return <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">{children}</th>;
+  },
+  td({ children }) {
+    return <td className="px-4 py-2.5 text-gray-200 whitespace-nowrap">{children}</td>;
+  },
 };
 
 function renderUserContent(content) {
@@ -168,7 +191,7 @@ export default function ChatBubble({ message }) {
       <img src="/collings-logo-solo.png" alt="Collings AI" className="flex-shrink-0 w-8 h-8 rounded-xl mt-1 shadow-md object-cover" />
       <div className="max-w-[80%] min-w-0">
         <div className="bg-gray-700 border border-gray-600 text-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 text-sm shadow-md overflow-hidden">
-          <ReactMarkdown components={markdownComponents}>
+          <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
             {message.content}
           </ReactMarkdown>
         </div>

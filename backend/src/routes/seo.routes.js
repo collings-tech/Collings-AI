@@ -33,4 +33,9 @@ router.get('/dashboard/:siteId/activity', seo.getActivityData);
 router.get('/dashboard/:siteId/top-improved', seo.getTopImproved);
 router.get('/dashboard/:siteId/attention', seo.getAttention);
 
+// Google Search Console
+router.get('/gsc/:siteId/summary', seo.gscSummary);
+router.get('/gsc/:siteId/top-queries', seo.gscTopQueries);
+router.get('/gsc/:siteId/top-pages', seo.gscTopPages);
+
 module.exports = router;

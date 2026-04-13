@@ -33,6 +33,13 @@ const siteSchema = new mongoose.Schema(
     lastUsedAt: {
       type: Date,
     },
+    // Optional: override the GSC property URL for this site
+    // e.g. "sc-domain:example.com" or "https://www.example.com/"
+    // If null, gscService.js auto-derives it from siteUrl
+    gscProperty: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );

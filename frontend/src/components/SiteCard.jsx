@@ -333,6 +333,7 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
   const [showBotConfig, setShowBotConfig] = useState(false);
   const [botEnabled, setBotEnabled] = useState(true);
   const [togglingBot, setTogglingBot] = useState(false);
+  const [gscSummary, setGscSummary] = useState(null);
 
   useEffect(() => {
     if (!siteId) return;
@@ -342,6 +343,17 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
         const res = await c.get(`/seo/config/${siteId}`);
         setBotEnabled(res.data.enabled !== false);
       } catch { /* keep default true */ }
+    })();
+  }, [siteId]);
+
+  useEffect(() => {
+    if (!siteId) return;
+    (async () => {
+      try {
+        const c = (await import('../api/client')).default;
+        const res = await c.get(`/seo/gsc/${siteId}/summary?days=28`);
+        if (res.data?.available) setGscSummary(res.data);
+      } catch { /* GSC not configured — stay null */ }
     })();
   }, [siteId]);
 
@@ -432,6 +444,21 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
               <div className="text-gray-500 text-xs leading-tight">Last ran</div>
             </div>
           </div>
+
+          {gscSummary && (
+            <div className="px-5 pb-2">
+              <div className="bg-gray-700/30 rounded-xl px-3 py-2 flex items-center gap-1.5 text-xs">
+                <svg className="w-3 h-3 text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <span className="text-gray-500">Search Console:</span>
+                <span className="text-gray-300 font-medium">{(gscSummary.clicks || 0).toLocaleString()} clicks</span>
+                <span className="text-gray-600">·</span>
+                <span className="text-gray-400">avg pos #{gscSummary.position}</span>
+                <span className="text-gray-600 ml-auto">28d</span>
+              </div>
+            </div>
+          )}
 
           {showAttention && attentionPosts && attentionPosts.length > 0 && (
             <div className="px-5 pb-3">

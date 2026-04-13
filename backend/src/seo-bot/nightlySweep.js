@@ -13,6 +13,7 @@ const { decrypt } = require('../utils/crypto');
 const { scorePost } = require('./seoScorer');
 const { wpRequest } = require('./pluginWriter');
 const logger = require('./logger');
+const gscService = require('./gscService');
 
 async function detectSeoPlugin(siteUrl) {
   try {
@@ -120,6 +121,60 @@ async function sweepSite(site) {
   }
 
   logger.info('Nightly sweep: queued jobs', { siteId: site._id, label: site.label, queued });
+
+  // GSC priority enrichment — bump priority for pages losing traffic or with poor CTR
+  if (gscService.isGscConfigured()) {
+    try {
+      const { pages: gscPages } = await gscService.getTopPages(site.siteUrl, site.gscProperty);
+      if (Array.isArray(gscPages) && gscPages.length > 0) {
+        let bumped = 0;
+        for (const gscPage of gscPages) {
+          // Build a consistent page URL pattern for matching WP post links
+          const pageUrl = gscPage.page;
+
+          // Low CTR on a page with decent impressions → priority 2 (bad title/desc)
+          const lowCtr = gscPage.impressions >= 100 && gscPage.ctr < 3.0;
+
+          // Check for declining impressions trend
+          let declining = false;
+          try {
+            const trend = await gscService.getPagePerformanceTrend(site.siteUrl, pageUrl, site.gscProperty);
+            if (trend.available && trend.impressionDelta < -20) declining = true;
+          } catch { /* non-critical */ }
+
+          if (!lowCtr && !declining) continue;
+
+          const newPriority = declining ? 1 : 2;
+
+          // Find a pending job for a post whose link matches this GSC page URL
+          const pendingJob = await SeoJob.findOne({
+            siteId: { $in: coSiteIds },
+            status: 'pending',
+            priority: { $gt: newPriority },
+          });
+
+          // Try to match by URL substring — find the post from WP posts/pages list
+          const matchedPost = [...posts, ...pages].find((p) => {
+            const link = typeof p.link === 'string' ? p.link : '';
+            return link === pageUrl || link === pageUrl.replace(/\/$/, '') || pageUrl.startsWith(link.replace(/\/$/, ''));
+          });
+
+          if (matchedPost) {
+            const updated = await SeoJob.findOneAndUpdate(
+              { siteId: { $in: coSiteIds }, postId: matchedPost.id, status: 'pending', priority: { $gt: newPriority } },
+              { $set: { priority: newPriority, triggeredBy: declining ? 'gsc_traffic_drop' : 'gsc_low_ctr' } }
+            );
+            if (updated) bumped++;
+          }
+        }
+        if (bumped > 0) {
+          logger.info('Nightly sweep: GSC bumped job priorities', { siteId: site._id, bumped });
+        }
+      }
+    } catch (err) {
+      logger.warn('Nightly sweep: GSC enrichment failed (non-critical)', { siteId: site._id, err: err.message });
+    }
+  }
 }
 
 async function fetchAllContent(creds, type) {

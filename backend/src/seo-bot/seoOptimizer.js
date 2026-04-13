@@ -46,7 +46,36 @@ RANK MATH SCORING RULES — Rank Math checks each of these. Maximise the score:
 
 IMPORTANT: If metaTitle does not start with or contain the exact focusKeyword, the score will DROP. Always verify before returning.`;
 
-async function optimizePost(post, currentSeoMeta, seoPlugin, otherPosts = [], currentScore, rewriteThreshold = 40) {
+/**
+ * Build a GSC data section appended to the Claude user message.
+ * Helps Claude pick the best focusKeyword from real search queries.
+ */
+function buildGscPromptSection(gscData) {
+  if (!gscData || !Array.isArray(gscData.queries) || gscData.queries.length === 0) return '';
+
+  const lines = gscData.queries
+    .slice(0, 10)
+    .map((q, i) => `  ${i + 1}. "${q.query}" — ${q.impressions} impressions, pos ${q.position}, CTR ${q.ctr}%`);
+
+  const summaryParts = [];
+  if (gscData.impressions != null) summaryParts.push(`${gscData.impressions} impressions`);
+  if (gscData.clicks != null) summaryParts.push(`${gscData.clicks} clicks`);
+  if (gscData.ctr != null) summaryParts.push(`${gscData.ctr}% CTR`);
+  if (gscData.position != null) summaryParts.push(`avg pos ${gscData.position}`);
+
+  return `
+
+GOOGLE SEARCH CONSOLE DATA (last 28 days for this page):
+${summaryParts.length > 0 ? `Overall: ${summaryParts.join(' · ')}\n` : ''}Top search queries bringing traffic to this page:
+${lines.join('\n')}
+
+IMPORTANT: Use this real search data when choosing focusKeyword:
+- Prefer queries with high impressions and position 4–20 (page-2 opportunity — small improvement = big traffic gain)
+- Avoid queries already at position 1–3 (already ranking well)
+- The chosen focusKeyword should match or closely reflect one of these real queries`;
+}
+
+async function optimizePost(post, currentSeoMeta, seoPlugin, otherPosts = [], currentScore, rewriteThreshold = 40, gscData = null) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set in backend environment');
 
@@ -90,7 +119,7 @@ Task:
     : `\n5. Do NOT rewrite content (score ${currentScore} is above rewrite threshold). Set rewrittenContent to null.`}
 
 Before returning, verify: does metaTitle contain the focusKeyword exactly? Is metaTitle 50–60 chars? Is metaDescription 140–160 chars?
-Return ONLY the JSON object.`;
+Return ONLY the JSON object.${gscData ? buildGscPromptSection(gscData) : ''}`;
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-5',
