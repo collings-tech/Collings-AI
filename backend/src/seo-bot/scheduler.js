@@ -303,9 +303,14 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
     // 1. Fetch post
     const post = await wpRequest({ ...creds, method: 'GET', endpoint: `${endpoint}?context=edit` });
 
-    // 2. Score
-    const { score: scoreBefore, breakdown: breakdownBefore, seoMeta: currentSeoMeta } = scorePost(post, seoPlugin, creds.siteUrl);
-    logger.info('processJob: scored', { postId: job.postId, scoreBefore });
+    // 2. Score — use Rank Math's stored rank_math_seo_score when available (it's what the WP dashboard shows),
+    // fall back to our simulator only if the meta field is absent or zero.
+    const { score: simulatedScoreBefore, breakdown: breakdownBefore, seoMeta: currentSeoMeta } = scorePost(post, seoPlugin, creds.siteUrl);
+    const rankMathStoredBefore = seoPlugin === 'rankmath'
+      ? Number(post.rank_math_seo_score || post?.meta?.rank_math_seo_score || 0)
+      : 0;
+    const scoreBefore = rankMathStoredBefore > 0 ? rankMathStoredBefore : simulatedScoreBefore;
+    logger.info('processJob: scored', { postId: job.postId, scoreBefore, rankMathStoredBefore, simulatedScoreBefore });
 
     // Determine if content needs a forced rewrite:
     //   (a) Thin content — under 600 words (Rank Math minimum)
@@ -399,13 +404,28 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
       return;
     }
 
-    // 8. Write back to WordPress — throws if the write is rejected
+    // 8. Write back to WordPress — throws if the write is rejected.
+    // pluginWriter triggers save_post after the Rank Math meta update, which causes
+    // Rank Math's PHP hook to recalculate and store rank_math_seo_score in post meta.
     await writeSeoMeta(creds, job.postId, job.postType, seoPlugin, optimized, post, simulatedScore);
 
-    // 9. RankMath scores are calculated client-side in the browser — they're never computed
-    // server-side, so re-fetching will always return the stale pre-write score.
-    // Use simulatedScore as scoreAfter: it's calculated from exactly what we wrote.
-    const scoreAfter = simulatedScore;
+    // 9. Re-fetch the post so we read the actual score Rank Math just stored.
+    // Fall back to simulatedScore if the field is missing or zero.
+    let scoreAfter = simulatedScore;
+    if (seoPlugin === 'rankmath') {
+      try {
+        const updatedPost = await wpRequest({ ...creds, method: 'GET', endpoint: `${endpoint}?context=edit` });
+        const actualScore = Number(updatedPost.rank_math_seo_score || updatedPost?.meta?.rank_math_seo_score || 0);
+        if (actualScore > 0) {
+          scoreAfter = actualScore;
+          logger.info('processJob: actual Rank Math score fetched', { postId: job.postId, scoreBefore, scoreAfter });
+        } else {
+          logger.info('processJob: rank_math_seo_score not in response, using simulated', { postId: job.postId, simulatedScore });
+        }
+      } catch (err) {
+        logger.warn('processJob: re-fetch for Rank Math score failed, using simulated', { postId: job.postId, err: err.message });
+      }
+    }
     logger.info('processJob: write complete', { postId: job.postId, scoreBefore, scoreAfter });
 
     // 10. Save log — and mirror to all other users who share this WordPress URL

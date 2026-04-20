@@ -13,6 +13,7 @@ const historyRoutes = require('./routes/history.routes');
 const logsRoutes = require('./routes/logs.routes');
 const seoRoutes = require('./routes/seo.routes');
 const chatRoutes = require('./routes/chat.routes');
+const sessionRoutes = require('./routes/session.routes');
 const errorMiddleware = require('./middleware/error.middleware');
 
 const seoBot = require('./seo-bot/index');
@@ -37,6 +38,7 @@ app.use('/v1/history', historyRoutes);
 app.use('/v1/logs', logsRoutes);
 app.use('/v1/seo', seoRoutes);
 app.use('/v1/chat', chatRoutes);
+app.use('/v1/sessions', sessionRoutes);
 
 // Global error handler (must be last)
 app.use(errorMiddleware);

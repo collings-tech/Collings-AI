@@ -564,7 +564,7 @@ export default function AuditTrailTab() {
           {FILTER_OPTIONS.map(({ id, label }) => (
             <button
               key={id}
-              onClick={() => setFilter(id)}
+              onClick={() => { setFilter(id); setLogsPage(1); }}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 filter === id ? 'bg-gray-700/80 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'
               }`}
@@ -661,8 +661,8 @@ export default function AuditTrailTab() {
             </div>
           )}
 
-          {/* Pagination — only for optimizations / all */}
-          {filter !== 'jobs' && logsTotalPages > 1 && (
+          {/* Pagination — only for optimizations filter (all-view mixes paginated logs with non-paginated jobs, which makes pages look identical) */}
+          {filter === 'optimizations' && logsTotalPages > 1 && (
             <div className="px-5 py-4 border-t border-gray-700/50 flex items-center justify-between">
               <p className="text-xs text-gray-500">
                 Page {logsPage} of {logsTotalPages} · {logsTotal} optimization{logsTotal !== 1 ? 's' : ''}

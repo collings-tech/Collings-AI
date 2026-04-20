@@ -7,8 +7,33 @@ import ActionCard from '../components/ActionCard';
 import SeoSummaryCard from '../components/SeoSummaryCard';
 import client from '../api/client';
 
+const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 function getDomainLabel(url) {
   try { return new URL(url).hostname; } catch { return url || ''; }
+}
+
+function formatSessionDate(dateStr) {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return 'This week';
+  if (diffDays < 30) return 'This month';
+  return 'Older';
+}
+
+function groupSessions(sessions) {
+  const groups = {};
+  const order = ['Today', 'Yesterday', 'This week', 'This month', 'Older'];
+  for (const s of sessions) {
+    const label = formatSessionDate(s.lastActivityAt);
+    if (!groups[label]) groups[label] = [];
+    groups[label].push(s);
+  }
+  return order.filter((o) => groups[o]).map((o) => ({ label: o, sessions: groups[o] }));
 }
 
 export default function ChatPage({ onBack }) {
@@ -19,6 +44,13 @@ export default function ChatPage({ onBack }) {
   const [detectedSeoPlugin, setDetectedSeoPlugin] = useState('none');
   const [actionResults, setActionResults] = useState({});
   const [thinkingMap, setThinkingMap] = useState({});
+
+  // Session state
+  const [sessions, setSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -26,25 +58,111 @@ export default function ChatPage({ onBack }) {
   const siteId = activeSite?.id || activeSite?._id;
   const messages = chatHistory[siteId] || [];
 
-  useEffect(() => { loadHistory(); detectSeo(); }, [siteId]);
+  useEffect(() => {
+    if (siteId) {
+      initSessions();
+      detectSeo();
+    }
+  }, [siteId]);
+
   useEffect(() => { scrollToBottom(); }, [messages, isLoading]);
 
   const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); };
 
-  const loadHistory = async () => {
-    if (!siteId) return;
+  // ---------------------------------------------------------------------------
+  // Session management
+  // ---------------------------------------------------------------------------
+
+  const initSessions = async () => {
     try {
-      const res = await client.get(`/history/${siteId}`);
-      const messages = res.data?.messages || res.data || [];
-      if (Array.isArray(messages) && messages.length > 0) {
-        setChatHistory(siteId, messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          timestamp: m.timestamp,
-        })));
+      const res = await client.get(`/sessions/${siteId}`);
+      const list = res.data?.sessions || [];
+      setSessions(list);
+
+      if (list.length === 0) {
+        await createNewSession(true);
+        return;
       }
-    } catch { /* Non-fatal */ }
+
+      const latest = list[0];
+      const age = Date.now() - new Date(latest.lastActivityAt).getTime();
+
+      if (age > SESSION_TIMEOUT_MS) {
+        // Timed out — start fresh but keep history accessible
+        await createNewSession(true);
+      } else {
+        // Resume the latest session
+        await loadSession(latest._id);
+      }
+    } catch {
+      setChatHistory(siteId, []);
+    }
   };
+
+  const createNewSession = async (silent = false) => {
+    try {
+      const res = await client.post(`/sessions/${siteId}`);
+      const session = res.data?.session;
+      if (!session) {
+        console.error('Session create returned no session object');
+        return null;
+      }
+
+      setSessions((prev) => [
+        { _id: session._id, title: session.title || 'New conversation', lastActivityAt: session.lastActivityAt || new Date().toISOString() },
+        ...prev,
+      ]);
+      setActiveSessionId(session._id);
+      setChatHistory(siteId, []);
+      setActionResults({});
+      setThinkingMap({});
+      return session._id;
+    } catch (err) {
+      console.error('Failed to create session:', err.message);
+      return null;
+    }
+  };
+
+  const loadSession = async (sessionId) => {
+    try {
+      const res = await client.get(`/sessions/${siteId}/${sessionId}`);
+      const msgs = res.data?.messages || [];
+      setActiveSessionId(sessionId);
+      setChatHistory(siteId, msgs.map((m) => ({ role: m.role, content: m.content, timestamp: m.timestamp })));
+      setActionResults({});
+      setThinkingMap({});
+    } catch {
+      setChatHistory(siteId, []);
+    }
+  };
+
+  const handleSelectSession = async (sessionId) => {
+    if (sessionId === activeSessionId) return;
+    await loadSession(sessionId);
+  };
+
+  const handleDeleteSession = async (e, sessionId) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this conversation?')) return;
+    setDeletingId(sessionId);
+    try {
+      await client.delete(`/sessions/${siteId}/${sessionId}`);
+      const updated = sessions.filter((s) => s._id !== sessionId);
+      setSessions(updated);
+      if (sessionId === activeSessionId) {
+        if (updated.length > 0) {
+          await loadSession(updated[0]._id);
+        } else {
+          await createNewSession(true);
+        }
+      }
+    } catch { /* non-critical */ }
+    setDeletingId(null);
+  };
+
+  // ---------------------------------------------------------------------------
+  // SEO plugin detection
+  // ---------------------------------------------------------------------------
 
   const detectSeo = async () => {
     if (!activeSite) return;
@@ -58,16 +176,9 @@ export default function ChatPage({ onBack }) {
     } catch { /* Stick with 'none' */ }
   };
 
-  const handleClearChat = async () => {
-    if (!window.confirm('Clear all chat history for this site?')) return;
-    try {
-      await client.delete(`/history/${siteId}`);
-      setChatHistory(siteId, []);
-      setActionResults({});
-    } catch (err) {
-      alert(err.message || 'Failed to clear history.');
-    }
-  };
+  // ---------------------------------------------------------------------------
+  // Messaging
+  // ---------------------------------------------------------------------------
 
   const isWordPressDeletionQuery = (message) => {
     const lower = message.toLowerCase();
@@ -85,6 +196,12 @@ export default function ChatPage({ onBack }) {
     setAttachments([]);
     textareaRef.current?.focus();
 
+    // Ensure we always have a session before sending so messages are persisted
+    let sessionId = activeSessionId;
+    if (!sessionId) {
+      sessionId = await createNewSession(true);
+    }
+
     const userMsg = {
       role: 'user',
       content: userMessage,
@@ -92,6 +209,21 @@ export default function ChatPage({ onBack }) {
       timestamp: new Date().toISOString(),
     };
     appendMessage(siteId, userMsg);
+
+    // Update session title in sidebar after first message
+    if (messages.length === 0 && userMessage) {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s._id === sessionId && s.title === 'New conversation'
+            ? { ...s, title: userMessage.slice(0, 60), lastActivityAt: new Date().toISOString() }
+            : s
+        )
+      );
+    } else {
+      setSessions((prev) =>
+        prev.map((s) => (s._id === sessionId ? { ...s, lastActivityAt: new Date().toISOString() } : s))
+      );
+    }
 
     if (userMessage && isWordPressDeletionQuery(userMessage)) {
       appendMessage(siteId, {
@@ -107,6 +239,7 @@ export default function ChatPage({ onBack }) {
     try {
       const res = await client.post('/chat/message', {
         siteId,
+        sessionId,
         siteUrl: activeSite.siteUrl || activeSite.site_url,
         wpUsername: activeSite.wpUsername || activeSite.wp_username,
         wpAppPassword: activeSite.wpAppPassword || activeSite.wp_app_password,
@@ -148,7 +281,11 @@ export default function ChatPage({ onBack }) {
     } finally {
       setLoading(false);
     }
-  }, [input, attachments, isLoading, siteId, messages, activeSite, detectedSeoPlugin]);
+  }, [input, attachments, isLoading, siteId, messages, activeSite, detectedSeoPlugin, activeSessionId]);
+
+  // ---------------------------------------------------------------------------
+  // File handling
+  // ---------------------------------------------------------------------------
 
   const processFiles = (files) => {
     Array.from(files).forEach((file) => {
@@ -184,11 +321,12 @@ export default function ChatPage({ onBack }) {
   const siteUrl = activeSite?.siteUrl || activeSite?.site_url || '';
   const siteLabel = activeSite?.label || getDomainLabel(siteUrl);
   const seoPluginLabel = detectedSeoPlugin === 'yoast' ? 'Yoast SEO' : detectedSeoPlugin === 'rankmath' ? 'Rank Math' : null;
+  const sessionGroups = groupSessions(sessions);
 
   return (
     <div className="h-screen bg-gray-900 flex flex-col">
       {/* Top bar */}
-      <header className="bg-gray-800/80 backdrop-blur-md border-b border-gray-700 px-4 py-3 flex items-center gap-3 flex-shrink-0">
+      <header className="bg-gray-800/80 backdrop-blur-md border-b border-gray-700 px-4 py-3 flex items-center gap-3 flex-shrink-0 z-10">
         <button
           onClick={onBack}
           className="flex items-center gap-1.5 text-gray-400 hover:text-white hover:bg-gray-700 px-3 py-1.5 rounded-xl transition-all border border-transparent hover:border-gray-600 text-sm"
@@ -197,6 +335,17 @@ export default function ChatPage({ onBack }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           <span className="hidden sm:block">Dashboard</span>
+        </button>
+
+        {/* Sidebar toggle (mobile) */}
+        <button
+          onClick={() => setSidebarOpen((o) => !o)}
+          className="flex items-center justify-center w-8 h-8 text-gray-400 hover:text-white hover:bg-gray-700 rounded-xl transition-all"
+          title="Toggle conversation history"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+          </svg>
         </button>
 
         <div className="flex-1 flex items-center gap-3 min-w-0">
@@ -215,160 +364,228 @@ export default function ChatPage({ onBack }) {
             </span>
           )}
         </div>
-
-        <button
-          onClick={handleClearChat}
-          className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 hover:bg-red-900/20 px-3 py-1.5 rounded-xl transition-all border border-transparent hover:border-red-800/40 text-sm flex-shrink-0"
-          title="Clear chat history"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-          <span className="hidden sm:block">Clear</span>
-        </button>
       </header>
 
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        {messages.length === 0 && !isLoading && (
-          <div className="flex flex-col items-center justify-center h-full text-center pb-8">
-            <img src="/collings-logo-solo.png" alt="Collings AI" className="w-16 h-16 mb-4 rounded-2xl" />
-            <h3 className="text-xl font-semibold text-gray-200 mb-2">Ready to help</h3>
-            <p className="text-gray-500 text-sm max-w-sm mb-6">
-              Ask me to create posts, manage content, optimize SEO, or anything else for <strong className="text-gray-400">{siteLabel}</strong>.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full">
-              {[
-                'Create a draft blog post about WordPress security tips',
-                'List my 5 most recent posts',
-                'Write a page about our company services',
-                'Create a post and optimize it for SEO',
-              ].map((suggestion) => (
+      {/* Body: sidebar + chat */}
+      <div className="flex flex-1 min-h-0">
+        {/* Sidebar */}
+        <aside
+          className={`
+            flex-shrink-0 bg-gray-850 border-r border-gray-700 flex flex-col transition-all duration-200 overflow-hidden
+            ${sidebarOpen ? 'w-64' : 'w-0'}
+          `}
+          style={{ background: '#111827' }}
+        >
+          {sidebarOpen && (
+            <>
+              {/* New chat button */}
+              <div className="p-3 flex-shrink-0">
                 <button
-                  key={suggestion}
-                  onClick={() => setInput(suggestion)}
-                  className="text-left text-xs text-gray-400 hover:text-brand-300 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-brand-600/50 rounded-xl px-3 py-2.5 transition-all"
+                  onClick={() => {
+                    // If there's already an empty session, just switch to it — don't create a duplicate
+                    const emptySession = sessions.find((s) => s.title === 'New conversation');
+                    if (emptySession) {
+                      handleSelectSession(emptySession._id);
+                    } else {
+                      createNewSession(false);
+                    }
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-brand-600/50 text-gray-300 hover:text-white rounded-xl transition-all text-sm font-medium"
                 >
-                  {suggestion}
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  New chat
                 </button>
-              ))}
-            </div>
-          </div>
-        )}
+              </div>
 
-        <div className="max-w-3xl mx-auto">
-          {messages.map((message, index) => (
-            <React.Fragment key={index}>
-              {message.role === 'assistant' && thinkingMap[index] && (
-                <ThinkingBlock thinking={thinkingMap[index]} />
-              )}
-              <ChatBubble message={message} />
-              {message.role === 'assistant' && actionResults[index] && (
-                <ActionCard actionResult={actionResults[index]} />
-              )}
-              {message.role === 'assistant' && (
-                <SeoSummaryCard content={message.content} detectedSeoPlugin={detectedSeoPlugin} />
-              )}
-            </React.Fragment>
-          ))}
-          {isLoading && <TypingIndicator />}
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-
-      {/* Input area */}
-      <div className="flex-shrink-0 border-t border-gray-700 bg-gray-800/50 backdrop-blur-md px-4 py-3">
-        <div className="max-w-3xl mx-auto">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/*,.pdf,.txt,.doc,.docx,.csv"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2 px-1">
-              {attachments.map((att, i) => (
-                <div key={i} className="relative group flex items-center gap-1.5 bg-gray-700 border border-gray-600 rounded-xl overflow-hidden">
-                  {att.type.startsWith('image/') ? (
-                    <img src={att.dataUrl} alt={att.name} className="h-14 w-14 object-cover" />
-                  ) : (
-                    <div className="flex items-center gap-1.5 px-3 py-2">
-                      <svg className="w-4 h-4 text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <span className="text-xs text-gray-300 max-w-[120px] truncate">{att.name}</span>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => removeAttachment(i)}
-                    className="absolute top-0.5 right-0.5 w-5 h-5 bg-gray-900/80 hover:bg-red-900/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
+              {/* Sessions list */}
+              <div className="flex-1 overflow-y-auto px-2 pb-4">
+                {sessions.length === 0 && (
+                  <p className="text-gray-600 text-xs text-center mt-6 px-3">No conversations yet</p>
+                )}
+                {sessionGroups.map(({ label, sessions: group }) => (
+                  <div key={label} className="mb-2">
+                    <p className="text-gray-600 text-xs font-medium px-3 py-1.5 uppercase tracking-wider">{label}</p>
+                    {group.map((session) => (
+                      <button
+                        key={session._id}
+                        onClick={() => handleSelectSession(session._id)}
+                        className={`
+                          w-full text-left px-3 py-2 rounded-xl mb-0.5 group flex items-center gap-2 transition-all
+                          ${session._id === activeSessionId
+                            ? 'bg-gray-700 text-white'
+                            : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}
+                        `}
+                      >
+                        <svg className="w-3.5 h-3.5 flex-shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <span className="flex-1 text-xs truncate">{session.title || 'New conversation'}</span>
+                        <button
+                          onClick={(e) => handleDeleteSession(e, session._id)}
+                          disabled={deletingId === session._id}
+                          className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded hover:text-red-400 transition-all flex-shrink-0"
+                          title="Delete"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </>
           )}
+        </aside>
 
-          <div
-            className="flex items-end gap-3 bg-gray-800 border border-gray-600 focus-within:border-brand-500 rounded-2xl px-4 py-3 transition-all shadow-lg"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDrop}
-          >
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading}
-              className="flex-shrink-0 w-7 h-7 text-gray-500 hover:text-brand-400 disabled:opacity-40 transition-colors flex items-center justify-center"
-              title="Attach file or image"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-            </button>
+        {/* Main chat area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Messages area */}
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            {messages.length === 0 && !isLoading && (
+              <div className="flex flex-col items-center justify-center h-full text-center pb-8">
+                <img src="/collings-logo-solo.png" alt="Collings AI" className="w-16 h-16 mb-4 rounded-2xl" />
+                <h3 className="text-xl font-semibold text-gray-200 mb-2">Ready to help</h3>
+                <p className="text-gray-500 text-sm max-w-sm mb-6">
+                  Ask me to create posts, manage content, optimize SEO, or anything else for <strong className="text-gray-400">{siteLabel}</strong>.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full">
+                  {[
+                    'Create a draft blog post about WordPress security tips',
+                    'List my 5 most recent posts',
+                    'Write a page about our company services',
+                    'Create a post and optimize it for SEO',
+                  ].map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => setInput(suggestion)}
+                      className="text-left text-xs text-gray-400 hover:text-brand-300 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-brand-600/50 rounded-xl px-3 py-2.5 transition-all"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              placeholder="Ask me to manage your WordPress site..."
-              rows={1}
-              disabled={isLoading}
-              className="flex-1 bg-transparent text-white placeholder-gray-500 resize-none focus:outline-none text-sm leading-relaxed max-h-36 overflow-y-auto disabled:opacity-50"
-              style={{ minHeight: '24px' }}
-              onInput={(e) => {
-                e.target.style.height = 'auto';
-                e.target.style.height = Math.min(e.target.scrollHeight, 144) + 'px';
-              }}
-            />
-
-            <button
-              onClick={handleSend}
-              disabled={(!input.trim() && attachments.length === 0) || isLoading}
-              className="flex-shrink-0 w-9 h-9 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-all flex items-center justify-center shadow-md shadow-brand-900/40"
-              title="Send (Enter)"
-            >
-              {isLoading ? (
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              )}
-            </button>
+            <div className="max-w-3xl mx-auto">
+              {messages.map((message, index) => (
+                <React.Fragment key={index}>
+                  {message.role === 'assistant' && thinkingMap[index] && (
+                    <ThinkingBlock thinking={thinkingMap[index]} />
+                  )}
+                  <ChatBubble message={message} />
+                  {message.role === 'assistant' && actionResults[index] && (
+                    <ActionCard actionResult={actionResults[index]} />
+                  )}
+                  {message.role === 'assistant' && (
+                    <SeoSummaryCard content={message.content} detectedSeoPlugin={detectedSeoPlugin} />
+                  )}
+                </React.Fragment>
+              ))}
+              {isLoading && <TypingIndicator />}
+              <div ref={messagesEndRef} />
+            </div>
           </div>
-          <p className="text-center text-gray-600 text-xs mt-2">
-            Press Enter to send, Shift+Enter for new line. All content saved as draft.
-          </p>
+
+          {/* Input area */}
+          <div className="flex-shrink-0 border-t border-gray-700 bg-gray-800/50 backdrop-blur-md px-4 py-3">
+            <div className="max-w-3xl mx-auto">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,.pdf,.txt,.doc,.docx,.csv"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2 px-1">
+                  {attachments.map((att, i) => (
+                    <div key={i} className="relative group flex items-center gap-1.5 bg-gray-700 border border-gray-600 rounded-xl overflow-hidden">
+                      {att.type.startsWith('image/') ? (
+                        <img src={att.dataUrl} alt={att.name} className="h-14 w-14 object-cover" />
+                      ) : (
+                        <div className="flex items-center gap-1.5 px-3 py-2">
+                          <svg className="w-4 h-4 text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="text-xs text-gray-300 max-w-[120px] truncate">{att.name}</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => removeAttachment(i)}
+                        className="absolute top-0.5 right-0.5 w-5 h-5 bg-gray-900/80 hover:bg-red-900/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div
+                className="flex items-end gap-3 bg-gray-800 border border-gray-600 focus-within:border-brand-500 rounded-2xl px-4 py-3 transition-all shadow-lg"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+              >
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading}
+                  className="flex-shrink-0 w-7 h-7 text-gray-500 hover:text-brand-400 disabled:opacity-40 transition-colors flex items-center justify-center"
+                  title="Attach file or image"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  placeholder="Ask me to manage your WordPress site..."
+                  rows={1}
+                  disabled={isLoading}
+                  className="flex-1 bg-transparent text-white placeholder-gray-500 resize-none focus:outline-none text-sm leading-relaxed max-h-36 overflow-y-auto disabled:opacity-50"
+                  style={{ minHeight: '24px' }}
+                  onInput={(e) => {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 144) + 'px';
+                  }}
+                />
+
+                <button
+                  onClick={handleSend}
+                  disabled={(!input.trim() && attachments.length === 0) || isLoading}
+                  className="flex-shrink-0 w-9 h-9 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-all flex items-center justify-center shadow-md shadow-brand-900/40"
+                  title="Send (Enter)"
+                >
+                  {isLoading ? (
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <p className="text-center text-gray-600 text-xs mt-2">
+                Press Enter to send, Shift+Enter for new line. All content saved as draft.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
 const { ANTHROPIC_API_KEY } = require('../config/env');
 const ChatHistory = require('../models/ChatHistory');
+const ChatSession = require('../models/ChatSession');
 const SeoJob = require('../models/SeoJob');
 const gscService = require('../seo-bot/gscService');
 const gaService = require('../seo-bot/gaService');
@@ -226,8 +227,13 @@ async function fetchAllPostsWithKeywords({ siteUrl, wpUsername, wpAppPassword })
 
   const withKeywords = [];
   const allKeywords = new Set();
+  let postCount = 0;
+  let pageCount = 0;
 
   for (const post of results) {
+    if (post.type === 'page') pageCount++;
+    else postCount++;
+
     const kw =
       (post.rank_math_focus_keyword && post.rank_math_focus_keyword.trim()) ||
       (post.meta && post.meta.rank_math_focus_keyword && post.meta.rank_math_focus_keyword.trim()) ||
@@ -256,7 +262,10 @@ async function fetchAllPostsWithKeywords({ siteUrl, wpUsername, wpAppPassword })
 
   return {
     totalPostsScanned: results.length,
+    totalPosts: postCount,
+    totalPages: pageCount,
     totalWithKeywords: withKeywords.length,
+    note: `Scans both posts (${postCount}) and pages (${pageCount}). WordPress dashboard "All (${postCount})" shows posts only — that's why totals differ.`,
     uniqueKeywords: [...allKeywords].sort(),
     posts: withKeywords,
   };
@@ -381,6 +390,7 @@ exports.detectSeoPlugin = async (req, res) => {
 exports.sendMessage = async (req, res) => {
   const {
     siteId,
+    sessionId,
     siteUrl,
     wpUsername,
     wpAppPassword,
@@ -547,16 +557,35 @@ exports.sendMessage = async (req, res) => {
       } catch { /* fall back to original reply */ }
     }
 
-    // Persist to history
+    // Persist to session (preferred) or fall back to legacy history
     if (siteId && req.user) {
       try {
         const userId = req.user._id || req.user.id;
-        let history = await ChatHistory.findOne({ userId, siteId });
-        if (!history) history = new ChatHistory({ userId, siteId, messages: [] });
-        if (userMessage) history.messages.push({ role: 'user', content: userMessage });
-        if (reply) history.messages.push({ role: 'assistant', content: reply });
-        await history.save();
-      } catch { /* non-critical */ }
+        const newMessages = [];
+        if (userMessage) newMessages.push({ role: 'user', content: userMessage });
+        if (reply) newMessages.push({ role: 'assistant', content: reply });
+
+        if (sessionId && newMessages.length > 0) {
+          const session = await ChatSession.findOne({ _id: sessionId, userId, siteId });
+          if (session) {
+            if (session.messages.length === 0 && session.title === 'New conversation' && userMessage) {
+              session.title = userMessage.slice(0, 60).trim() || 'New conversation';
+            }
+            session.messages.push(...newMessages);
+            session.lastActivityAt = new Date();
+            await session.save();
+          } else {
+            console.warn(`[chat] Session not found: sessionId=${sessionId} userId=${userId} siteId=${siteId}`);
+          }
+        } else {
+          let history = await ChatHistory.findOne({ userId, siteId });
+          if (!history) history = new ChatHistory({ userId, siteId, messages: [] });
+          history.messages.push(...newMessages);
+          await history.save();
+        }
+      } catch (saveErr) {
+        console.error('[chat] Failed to persist messages:', saveErr.message);
+      }
     }
 
     // Queue SEO job if a post was created/edited
