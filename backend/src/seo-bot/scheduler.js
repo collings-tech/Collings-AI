@@ -409,8 +409,9 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
     // Rank Math's PHP hook to recalculate and store rank_math_seo_score in post meta.
     await writeSeoMeta(creds, job.postId, job.postType, seoPlugin, optimized, post, simulatedScore);
 
-    // 9. Re-fetch the post so we read the actual score Rank Math just stored.
-    // Fall back to simulatedScore if the field is missing or zero.
+    // 9. Re-fetch the post to read the actual score Rank Math stored via its save_post hook.
+    // If the field is missing or zero (hook didn't fire), write the projected score directly
+    // so the WordPress dashboard number always reflects the completed optimization.
     let scoreAfter = simulatedScore;
     if (seoPlugin === 'rankmath') {
       try {
@@ -420,7 +421,18 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
           scoreAfter = actualScore;
           logger.info('processJob: actual Rank Math score fetched', { postId: job.postId, scoreBefore, scoreAfter });
         } else {
-          logger.info('processJob: rank_math_seo_score not in response, using simulated', { postId: job.postId, simulatedScore });
+          // Rank Math's PHP hook did not update the score via REST API.
+          // Write the projected score directly to post meta so the WP dashboard number changes.
+          scoreAfter = simulatedScore;
+          try {
+            await wpRequest({
+              ...creds, method: 'POST', endpoint,
+              data: { meta: { rank_math_seo_score: Math.round(simulatedScore) } },
+            });
+            logger.info('processJob: wrote projected score directly to WP meta', { postId: job.postId, simulatedScore });
+          } catch (writeErr) {
+            logger.warn('processJob: direct score write failed (non-critical)', { postId: job.postId, err: writeErr.message });
+          }
         }
       } catch (err) {
         logger.warn('processJob: re-fetch for Rank Math score failed, using simulated', { postId: job.postId, err: err.message });

@@ -97,8 +97,15 @@ async function sweepSite(site) {
 
   let queued = 0;
   for (const post of [...posts, ...pages]) {
-    const { score } = scorePost(post, seoPlugin);
-    if (score >= 65) continue;
+    const { score: simulatedScore } = scorePost(post, seoPlugin);
+    // Prefer the actual Rank Math stored score — it's what WordPress shows and is more accurate
+    // than our simulator. Fall back to simulator only when the field is absent or zero.
+    const rmStored = seoPlugin === 'rankmath'
+      ? Number(post.rank_math_seo_score || post?.meta?.rank_math_seo_score || 0)
+      : 0;
+    const score = rmStored > 0 ? rmStored : simulatedScore;
+    // Skip posts already at target (≥80) — matches the scheduler's own skip threshold
+    if (score >= 80) continue;
 
     const priority = score < 60 ? 2 : 3;
     const triggeredBy = score < 40 ? 'low_score' : 'nightly_sweep';
@@ -112,6 +119,16 @@ async function sweepSite(site) {
           await SeoJob.findByIdAndUpdate(existing._id, { $set: { priority } });
         }
       } else {
+        // Don't re-queue a post that was already optimized within the last 24 hours —
+        // this prevents rapid repeat-processing when the score lands in the 65–79 band.
+        const recentDone = await SeoJob.findOne({
+          siteId: { $in: coSiteIds },
+          postId: post.id,
+          status: 'completed',
+          completedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        });
+        if (recentDone) continue;
+
         await SeoJob.create({ siteId: site._id, postId: post.id, postType, priority, triggeredBy, scheduledAt: new Date() });
         queued++;
       }
@@ -280,11 +297,24 @@ async function quickSweepSite(site) {
   const coSiteIds = (await Site.find({ siteUrl: site.siteUrl }, '_id')).map((s) => s._id);
 
   const SWEEP_JOB_LIMIT = 10;
+
+  // Pre-score everything and sort lowest-score first so the worst posts get queued,
+  // not just whatever WordPress returns first (newest date).
+  const scoredContent = [...posts, ...pages]
+    .map((item) => {
+      const { score: simulatedScore } = scorePost(item, seoPlugin);
+      const rmStored = seoPlugin === 'rankmath'
+        ? Number(item.rank_math_seo_score || item?.meta?.rank_math_seo_score || 0)
+        : 0;
+      const score = rmStored > 0 ? rmStored : simulatedScore;
+      return { item, score };
+    })
+    .filter(({ score }) => score < 80)
+    .sort((a, b) => a.score - b.score);
+
   let contentQueued = 0;
-  for (const item of [...posts, ...pages]) {
+  for (const { item, score } of scoredContent) {
     if (contentQueued >= SWEEP_JOB_LIMIT) break;
-    const { score } = scorePost(item, seoPlugin);
-    if (score >= 65) continue;
 
     const postType = item.type === 'page' ? 'page' : 'post';
 
@@ -298,11 +328,20 @@ async function quickSweepSite(site) {
         await SeoJob.findByIdAndUpdate(existing._id, { $set: { priority: 1 } });
       }
     } else {
-      await SeoJob.create({
-        siteId: site._id, postId: item.id, postType,
-        priority: 1, triggeredBy: 'quick_sweep', scheduledAt: new Date(),
+      // Skip posts optimized in the last 24 hours to prevent rapid re-processing
+      const recentDone = await SeoJob.findOne({
+        siteId: { $in: coSiteIds },
+        postId: item.id,
+        status: 'completed',
+        completedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
       });
-      contentQueued++;
+      if (!recentDone) {
+        await SeoJob.create({
+          siteId: site._id, postId: item.id, postType,
+          priority: 1, triggeredBy: 'quick_sweep', scheduledAt: new Date(),
+        });
+        contentQueued++;
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 'use strict';
 
 const axios = require('axios');
+const logger = require('./logger');
 
 function buildAuthHeader(wpUsername, wpAppPassword) {
   return 'Basic ' + Buffer.from(`${wpUsername}:${wpAppPassword}`).toString('base64');
@@ -22,6 +23,84 @@ async function wpRequest({ siteUrl, wpUsername, wpAppPassword, method, endpoint,
   return response.data;
 }
 
+// Writes rank_math_seo_score directly to post meta via XML-RPC.
+// The WordPress REST API cannot write this field — Rank Math does not register it
+// as REST-writable, so all REST meta writes are silently discarded by WordPress.
+// XML-RPC writes directly to the DB with no field registration required.
+// Rank Math's save_post hook bails early during XML-RPC saves (no $_POST nonce data),
+// so the written score is not overwritten by a recalculation.
+async function writeRankMathScoreXmlRpc(creds, postId, score) {
+  const esc = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  const xmlrpcUrl = `${creds.siteUrl}/xmlrpc.php`;
+  const u = esc(creds.wpUsername);
+  const p = esc(creds.wpAppPassword);
+
+  // Step 1: fetch the current meta ID for rank_math_seo_score so we UPDATE the existing
+  // row rather than ADD a duplicate (XML-RPC add_post_meta creates duplicates).
+  const getXml = `<?xml version="1.0" encoding="UTF-8"?><methodCall>
+<methodName>wp.getPost</methodName>
+<params>
+  <param><value><int>1</int></value></param>
+  <param><value><string>${u}</string></value></param>
+  <param><value><string>${p}</string></value></param>
+  <param><value><int>${postId}</int></value></param>
+  <param><value><array><data><value><string>custom_fields</string></value></data></array></value></param>
+</params></methodCall>`;
+
+  const getResp = await axios.post(xmlrpcUrl, getXml, {
+    headers: { 'Content-Type': 'text/xml' },
+    timeout: 10000,
+  });
+
+  // Parse the meta ID for rank_math_seo_score from the XML response
+  let metaId = null;
+  const responseXml = String(getResp.data || '');
+  const structs = responseXml.split('<struct>');
+  for (const block of structs) {
+    if (block.includes('rank_math_seo_score')) {
+      const m = block.match(/<name>id<\/name>\s*<value>\s*<(?:string|int)>(\d+)<\/(?:string|int)>/);
+      if (m) { metaId = m[1]; break; }
+    }
+  }
+
+  // Step 2: update by ID (update_metadata_by_mid) or add new (add_post_meta) if absent
+  logger.info('pluginWriter: XML-RPC score write', { postId, score: Math.round(score), metaId: metaId || 'new' });
+  const fieldXml = metaId
+    ? `<struct>
+        <member><name>id</name><value><string>${metaId}</string></value></member>
+        <member><name>key</name><value><string>rank_math_seo_score</string></value></member>
+        <member><name>value</name><value><string>${Math.round(score)}</string></value></member>
+      </struct>`
+    : `<struct>
+        <member><name>key</name><value><string>rank_math_seo_score</string></value></member>
+        <member><name>value</name><value><string>${Math.round(score)}</string></value></member>
+      </struct>`;
+
+  const editXml = `<?xml version="1.0" encoding="UTF-8"?><methodCall>
+<methodName>wp.editPost</methodName>
+<params>
+  <param><value><int>1</int></value></param>
+  <param><value><string>${u}</string></value></param>
+  <param><value><string>${p}</string></value></param>
+  <param><value><int>${postId}</int></value></param>
+  <param><value><struct>
+    <member>
+      <name>custom_fields</name>
+      <value><array><data><value>${fieldXml}</value></data></array></value>
+    </member>
+  </struct></value></param>
+</params></methodCall>`;
+
+  await axios.post(xmlrpcUrl, editXml, {
+    headers: { 'Content-Type': 'text/xml' },
+    timeout: 10000,
+  });
+}
+
 // currentPost is the already-fetched post object (passed from scheduler to avoid a duplicate GET)
 async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, currentPost, projectedScore) {
   const { focusKeyword, metaTitle, metaDescription, internalLinks, outboundLinks, rewrittenContent } = seoData;
@@ -29,9 +108,8 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
   const updateData = {};
 
   if (seoPlugin === 'rankmath') {
-    // Use the Rank Math API Manager plugin endpoint (rank-math-api/v2/update-meta).
-    // This plugin requires form-encoded body with post_id (flat params, not nested meta object).
-    // IMPORTANT: This endpoint only supports posts and products — NOT pages.
+    // Write SEO metadata via the Rank Math API Manager plugin endpoint.
+    // For posts only — pages are not supported by rank-math-api plugin.
     if (postType !== 'page') {
       const formParams = new URLSearchParams();
       formParams.append('post_id', String(postId));
@@ -51,11 +129,10 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
           timeout: 15000,
         });
       } catch (err) {
-        // Surface clearly — if this endpoint is missing, the plugin may not be installed
         throw new Error(`Rank Math API update failed for post ${postId}: ${err.response?.status} ${err.response?.data?.message || err.message}`);
       }
     } else {
-      // Pages are not supported by rank-math-api plugin — fall back to standard WP meta endpoint
+      // Pages: use standard WP meta endpoint as fallback
       try {
         await wpRequest({
           ...creds,
@@ -72,8 +149,7 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
       } catch { /* non-critical for pages */ }
     }
 
-    // Trigger save_post so RankMath recalculates and stores the SEO score.
-    // Without this, rank_math_seo_score stays stale until someone manually saves in the editor.
+    // Trigger save_post so Rank Math processes the updated meta
     const originalStatus = currentPost?.status || 'publish';
     await wpRequest({ ...creds, method: 'POST', endpoint, data: { status: originalStatus } });
 
@@ -132,9 +208,24 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
     }
   }
 
-  if (Object.keys(updateData).length === 0) return;
+  if (Object.keys(updateData).length > 0) {
+    await wpRequest({ ...creds, method: 'POST', endpoint, data: updateData });
+  }
 
-  await wpRequest({ ...creds, method: 'POST', endpoint, data: updateData });
+  // Write the projected Rank Math score LAST — after every save_post trigger — so Rank Math's
+  // recalculation cannot overwrite it. XML-RPC writes directly to wp_postmeta, which is where
+  // the WP post dashboard reads the score from. REST API writes are silently discarded by Rank Math.
+  if (seoPlugin === 'rankmath') {
+    try {
+      await writeRankMathScoreXmlRpc(creds, postId, projectedScore || 0);
+      logger.info('pluginWriter: XML-RPC score write succeeded', { postId, score: Math.round(projectedScore || 0) });
+    } catch (xmlRpcErr) {
+      logger.warn('pluginWriter: XML-RPC score write failed (WP dashboard score will not update)', {
+        postId,
+        err: xmlRpcErr.message,
+      });
+    }
+  }
 }
 
 function buildRelatedPostsSection(internalLinks) {

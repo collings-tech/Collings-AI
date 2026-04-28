@@ -32,7 +32,7 @@ const seoJobSchema = new mongoose.Schema(
     },
     triggeredBy: {
       type: String,
-      enum: ['new_post', 'nightly_sweep', 'manual', 'low_score', 'quick_sweep', 'image_check'],
+      enum: ['new_post', 'nightly_sweep', 'manual', 'low_score', 'quick_sweep', 'image_check', 'gsc_traffic_drop', 'gsc_low_ctr'],
       required: true,
     },
     scheduledAt: {
@@ -56,6 +56,7 @@ const seoJobSchema = new mongoose.Schema(
           metaTitle: { before: String, after: String },
           metaDescription: { before: String, after: String },
           internalLinksAdded: { type: Number, default: 0 },
+          outboundLinksAdded: { type: Number, default: 0 },
           contentRewritten: { type: Boolean, default: false },
         },
       },
