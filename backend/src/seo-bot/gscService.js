@@ -378,6 +378,100 @@ async function getPagePerformanceTrend(siteUrl, pageUrl, gscProperty = null) {
   }
 }
 
+/**
+ * Compare site-wide keyword positions and clicks: current period vs previous period.
+ * Used to answer "have we improved this week?" questions.
+ *
+ * Returns each keyword with its position/clicks in both periods plus the delta.
+ * Keywords that only appear in one period are included with null for the missing side.
+ *
+ * @param {string} siteUrl
+ * @param {string|null} gscProperty
+ * @param {number} days  period length in days (default 7 = week-over-week)
+ * @param {number} limit  max keywords to return
+ */
+async function getKeywordsTrend(siteUrl, gscProperty = null, days = 7, limit = 25) {
+  if (!isGscConfigured()) return { available: false, keywords: [] };
+
+  try {
+    const gsc = getSearchClient();
+
+    const now = new Date();
+    const currentEnd = new Date(now);
+    currentEnd.setDate(now.getDate() - 1); // yesterday
+
+    const currentStart = new Date(currentEnd);
+    currentStart.setDate(currentEnd.getDate() - (days - 1));
+
+    const previousEnd = new Date(currentStart);
+    previousEnd.setDate(currentStart.getDate() - 1);
+
+    const previousStart = new Date(previousEnd);
+    previousStart.setDate(previousEnd.getDate() - (days - 1));
+
+    const [currentRows, previousRows] = await Promise.all([
+      findWorkingProperty(siteUrl, gscProperty, async (property) => {
+        const res = await gsc.searchanalytics.query({
+          siteUrl: property,
+          requestBody: {
+            startDate: formatDate(currentStart),
+            endDate: formatDate(currentEnd),
+            dimensions: ['query'],
+            rowLimit: limit,
+            orderBy: [{ fieldName: 'impressions', sortOrder: 'DESCENDING' }],
+          },
+        });
+        return res.data.rows || [];
+      }),
+      findWorkingProperty(siteUrl, gscProperty, async (property) => {
+        const res = await gsc.searchanalytics.query({
+          siteUrl: property,
+          requestBody: {
+            startDate: formatDate(previousStart),
+            endDate: formatDate(previousEnd),
+            dimensions: ['query'],
+            rowLimit: limit,
+            orderBy: [{ fieldName: 'impressions', sortOrder: 'DESCENDING' }],
+          },
+        });
+        return res.data.rows || [];
+      }),
+    ]);
+
+    // Index previous period by query keyword
+    const prevMap = new Map();
+    for (const row of previousRows) {
+      prevMap.set(row.keys[0], {
+        clicks: row.clicks || 0,
+        impressions: row.impressions || 0,
+        position: parseFloat((row.position || 0).toFixed(1)),
+      });
+    }
+
+    const keywords = currentRows.map((row) => {
+      const kw = row.keys[0];
+      const curr = {
+        clicks: row.clicks || 0,
+        impressions: row.impressions || 0,
+        position: parseFloat((row.position || 0).toFixed(1)),
+      };
+      const prev = prevMap.get(kw) || null;
+      const positionDelta = prev ? parseFloat((prev.position - curr.position).toFixed(1)) : null; // positive = improved (lower number = higher rank)
+      const clicksDelta = prev ? curr.clicks - prev.clicks : null;
+      return { query: kw, current: curr, previous: prev, positionDelta, clicksDelta };
+    });
+
+    return {
+      available: true,
+      currentPeriod: `${formatDate(currentStart)} to ${formatDate(currentEnd)}`,
+      previousPeriod: `${formatDate(previousStart)} to ${formatDate(previousEnd)}`,
+      keywords,
+    };
+  } catch (err) {
+    return { available: false, keywords: [], error: err.message };
+  }
+}
+
 module.exports = {
   isGscConfigured,
   deriveGscProperty,
@@ -386,4 +480,5 @@ module.exports = {
   getTopQueriesForPage,
   getTopPages,
   getPagePerformanceTrend,
+  getKeywordsTrend,
 };

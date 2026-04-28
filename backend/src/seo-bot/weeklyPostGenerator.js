@@ -12,7 +12,7 @@
  *       - Internal links to existing posts
  *       - JSON-LD Article schema markup
  *       - Full SEO meta (focus keyword, meta title, meta description)
- *  4. Saves the post as a DRAFT on WordPress.
+ *  4. Publishes the post directly on WordPress.
  *  5. Flags old posts (>6 months, score < 70) as priority-1 refresh jobs.
  */
 
@@ -244,7 +244,7 @@ Return ONLY the JSON object.`,
   const wpPayload = {
     title: postData.title,
     content: postData.content,
-    status: 'draft',
+    status: 'publish',
     excerpt: postData.metaDescription,
   };
 
@@ -262,10 +262,10 @@ Return ONLY the JSON object.`,
     };
   }
 
-  // ---- Step 4: POST to WordPress as draft ----
+  // ---- Step 4: POST to WordPress and publish ----
   const created = await wpRequest({ ...creds, method: 'POST', endpoint: '/posts', data: wpPayload });
 
-  logger.info('Weekly post: draft created', {
+  logger.info('Weekly post: published', {
     siteId: site._id,
     label: site.label,
     postId: created.id,

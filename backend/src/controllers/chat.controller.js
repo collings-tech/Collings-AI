@@ -24,9 +24,26 @@ const GSC_KEYWORDS = [
   'site performance', 'search performance', 'seo performance',
 ];
 
+// Phrases that indicate the user wants a time-based comparison (week-over-week, trends, changes)
+const COMPARISON_KEYWORDS = [
+  'this week', 'last week', 'this month', 'last month',
+  'increased', 'decreased', 'improved', 'dropped', 'fallen', 'risen',
+  'changed', 'trend', 'trending', 'progress', 'growth', 'decline',
+  'better', 'worse', 'higher', 'lower', 'gaining', 'losing',
+  'moved up', 'moved down', 'gone up', 'gone down', 'went up', 'went down',
+  'week over week', 'weekly', 'daily', 'compared to', 'vs last',
+  'any improvement', 'any change', 'any increase', 'any decrease',
+  'getting better', 'getting worse',
+];
+
 function isGscQuestion(message) {
   const lower = message.toLowerCase();
   return GSC_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+function isComparisonQuestion(message) {
+  const lower = message.toLowerCase();
+  return COMPARISON_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 // ---------------------------------------------------------------------------
@@ -119,8 +136,17 @@ The system will return: totalPostsScanned, totalWithKeywords, uniqueKeywords (ar
 Use this data to give a complete answer. Do NOT emit any further wpAction blocks after this.
 Note: Rank Math's Rank Tracker (Google search ranking history) is a separate cloud feature not available via REST API.
 
+## MULTI-PART QUESTIONS (CRITICAL)
+When the user asks multiple questions in a single message (e.g. "What are our rankings? Have we increased this week?"), you MUST answer EVERY part. Do not skip any question. Before responding, identify each question in the message and make sure each one is addressed.
+
 ## GOOGLE SEARCH CONSOLE DATA
-When the user asks about traffic, clicks, impressions, search rankings, keyword positions, CTR, top pages, top queries, or anything related to how the site performs in Google Search — the system will automatically inject real Google Search Console data into the conversation as a "GSC DATA" block BEFORE your response. When you see this block, use it to answer the question directly and accurately. Do NOT say you cannot access traffic data — the data is provided to you in the message.
+When the user asks about traffic, clicks, impressions, search rankings, keyword positions, CTR, top pages, top queries, or anything related to how the site performs in Google Search — the system will automatically inject real Google Search Console data into the conversation as "GSC DATA" and/or "GSC KEYWORD TREND" blocks BEFORE your response. Use this data to answer the question directly and accurately. Do NOT say you cannot access traffic data — the data is provided to you in the message.
+
+If the message contains a "GSC KEYWORD TREND" block, it shows each keyword's position and clicks for the current period vs the previous period:
+- positionDelta > 0 means the keyword IMPROVED (moved to a better rank — lower position number = higher in search results)
+- positionDelta < 0 means the keyword got WORSE (moved down in search results)
+- clicksDelta shows the raw change in clicks
+Use this to directly and specifically answer questions like "have our rankings improved?", "which keywords went up?", "are we doing better this week?"
 
 Always confirm what action was taken and provide relevant details.
 If an action fails, explain the error clearly and suggest a fix.`;
@@ -415,15 +441,21 @@ exports.sendMessage = async (req, res) => {
           gscProperty = siteDoc?.gscProperty || null;
         }
 
-        const [summaryRes, queriesRes, pagesRes] = await Promise.allSettled([
+        // Always fetch 28-day summary + top pages.
+        // Also fetch week-over-week keyword trend when the user asks about changes/progress.
+        const needsTrend = isComparisonQuestion(userMessage);
+
+        const [summaryRes, queriesRes, pagesRes, trendRes] = await Promise.allSettled([
           gscService.getSiteSummary(siteUrl, gscProperty, 28),
           gscService.getTopQueriesSite(siteUrl, gscProperty, 28, 20),
           gscService.getTopPages(siteUrl, gscProperty, 28, 20),
+          needsTrend ? gscService.getKeywordsTrend(siteUrl, gscProperty, 7, 25) : Promise.resolve(null),
         ]);
 
         const summary = summaryRes.status === 'fulfilled' ? summaryRes.value : null;
         const queries = queriesRes.status === 'fulfilled' ? queriesRes.value : null;
         const pages = pagesRes.status === 'fulfilled' ? pagesRes.value : null;
+        const trend = trendRes.status === 'fulfilled' ? trendRes.value : null;
 
         if (summary?.available) {
           const queryLines = queries?.queries?.length
@@ -440,7 +472,33 @@ exports.sendMessage = async (req, res) => {
               }).join('\n')
             : '  (no page data)';
 
-          gscContext = `\n\n--- GSC DATA (Google Search Console — last 28 days) ---\nSite: ${siteUrl}\nTotal Clicks: ${summary.clicks.toLocaleString()}\nTotal Impressions: ${summary.impressions.toLocaleString()}\nAvg CTR: ${summary.ctr}%\nAvg Position: #${summary.position}\n\nTop Search Queries:\n${queryLines}\n\nTop Pages by Impressions:\n${pageLines}\n--- END GSC DATA ---\n\nUse the above real data to answer the user's question.`;
+          gscContext = `\n\n--- GSC DATA (Google Search Console — last 28 days) ---\nSite: ${siteUrl}\nTotal Clicks: ${summary.clicks.toLocaleString()}\nTotal Impressions: ${summary.impressions.toLocaleString()}\nAvg CTR: ${summary.ctr}%\nAvg Position: #${summary.position}\n\nTop Search Queries:\n${queryLines}\n\nTop Pages by Impressions:\n${pageLines}\n--- END GSC DATA ---`;
+
+          // Append week-over-week keyword trend when the user asked about changes
+          if (trend?.available && trend.keywords?.length > 0) {
+            const improved = trend.keywords.filter((k) => k.positionDelta !== null && k.positionDelta > 0);
+            const declined = trend.keywords.filter((k) => k.positionDelta !== null && k.positionDelta < 0);
+            const unchanged = trend.keywords.filter((k) => k.positionDelta === null || k.positionDelta === 0);
+            const newKw = trend.keywords.filter((k) => k.previous === null);
+
+            const kwLines = trend.keywords.slice(0, 20).map((k) => {
+              const prevPos = k.previous ? `#${k.previous.position}` : 'new';
+              const currPos = `#${k.current.position}`;
+              let delta = '';
+              if (k.positionDelta !== null && k.positionDelta > 0) delta = ` ↑ +${k.positionDelta} (improved)`;
+              else if (k.positionDelta !== null && k.positionDelta < 0) delta = ` ↓ ${k.positionDelta} (dropped)`;
+              else if (k.previous === null) delta = ' (new keyword)';
+              else delta = ' (no change)';
+              const clickChange = k.clicksDelta !== null ? ` | clicks: ${k.previous?.clicks ?? 0}→${k.current.clicks} (${k.clicksDelta >= 0 ? '+' : ''}${k.clicksDelta})` : '';
+              return `  "${k.query}": ${prevPos} → ${currPos}${delta}${clickChange}`;
+            }).join('\n');
+
+            gscContext += `\n\n--- GSC KEYWORD TREND (${trend.previousPeriod} vs ${trend.currentPeriod}) ---\nSummary: ${improved.length} keywords improved, ${declined.length} declined, ${unchanged.length} unchanged, ${newKw.length} new\n\nKeyword position changes (lower position number = better rank):\n${kwLines}\n--- END GSC KEYWORD TREND ---`;
+          } else if (needsTrend && (!trend?.available)) {
+            gscContext += `\n\n[NOTE: Week-over-week keyword trend data was not available. Answer based on the 28-day data above and note what information is missing.]`;
+          }
+
+          gscContext += `\n\nUse ALL of the above real data to answer every part of the user's question.`;
         }
       } catch { /* non-critical — proceed without GSC */ }
     }
