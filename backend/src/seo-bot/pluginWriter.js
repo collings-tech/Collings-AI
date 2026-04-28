@@ -149,9 +149,19 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
       } catch { /* non-critical for pages */ }
     }
 
-    // Trigger save_post so Rank Math processes the updated meta
+    // Trigger save_post so Rank Math processes the updated meta.
+    // Include the Rank Math fields at top-level — Rank Math registers them as REST fields
+    // (not under meta), so if update_callbacks exist they write + trigger a live recalculation.
     const originalStatus = currentPost?.status || 'publish';
-    await wpRequest({ ...creds, method: 'POST', endpoint, data: { status: originalStatus } });
+    await wpRequest({
+      ...creds, method: 'POST', endpoint,
+      data: {
+        status: originalStatus,
+        rank_math_focus_keyword: focusKeyword,
+        rank_math_title: metaTitle,
+        rank_math_description: metaDescription,
+      },
+    });
 
   } else if (seoPlugin === 'yoast') {
     updateData.meta = {

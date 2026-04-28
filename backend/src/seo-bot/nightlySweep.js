@@ -119,13 +119,18 @@ async function sweepSite(site) {
           await SeoJob.findByIdAndUpdate(existing._id, { $set: { priority } });
         }
       } else {
-        // Don't re-queue a post that was already optimized within the last 24 hours —
-        // this prevents rapid repeat-processing when the score lands in the 65–79 band.
+        // Don't re-queue a post recently optimized with actual changes written.
+        // Skipped jobs (no improvement written) don't count — the post still needs work.
+        // Very low scores (< 40) use a shorter 4-hour window so they retry aggressively.
+        const cooldownMs = score < 40
+          ? 4 * 60 * 60 * 1000
+          : 24 * 60 * 60 * 1000;
         const recentDone = await SeoJob.findOne({
           siteId: { $in: coSiteIds },
           postId: post.id,
           status: 'completed',
-          completedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          'result.action': 'seo_optimization',
+          completedAt: { $gte: new Date(Date.now() - cooldownMs) },
         });
         if (recentDone) continue;
 
@@ -296,7 +301,9 @@ async function quickSweepSite(site) {
   // All site IDs for this WordPress URL (multiple users may share it)
   const coSiteIds = (await Site.find({ siteUrl: site.siteUrl }, '_id')).map((s) => s._id);
 
-  const SWEEP_JOB_LIMIT = 10;
+  // Content and image jobs have separate caps so images never crowd out low-scoring posts.
+  const CONTENT_JOB_LIMIT = 10;
+  const IMAGE_JOB_LIMIT = 5;
 
   // Pre-score everything and sort lowest-score first so the worst posts get queued,
   // not just whatever WordPress returns first (newest date).
@@ -314,7 +321,7 @@ async function quickSweepSite(site) {
 
   let contentQueued = 0;
   for (const { item, score } of scoredContent) {
-    if (contentQueued >= SWEEP_JOB_LIMIT) break;
+    if (contentQueued >= CONTENT_JOB_LIMIT) break;
 
     const postType = item.type === 'page' ? 'page' : 'post';
 
@@ -328,12 +335,18 @@ async function quickSweepSite(site) {
         await SeoJob.findByIdAndUpdate(existing._id, { $set: { priority: 1 } });
       }
     } else {
-      // Skip posts optimized in the last 24 hours to prevent rapid re-processing
+      // Only skip re-queuing if actual changes were written recently.
+      // Skipped jobs (no improvement written) don't count — the post still needs work.
+      // Very low scores (< 40) use a 4-hour window so they retry aggressively.
+      const cooldownMs = score < 40
+        ? 4 * 60 * 60 * 1000
+        : 24 * 60 * 60 * 1000;
       const recentDone = await SeoJob.findOne({
         siteId: { $in: coSiteIds },
         postId: item.id,
         status: 'completed',
-        completedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        'result.action': 'seo_optimization',
+        completedAt: { $gte: new Date(Date.now() - cooldownMs) },
       });
       if (!recentDone) {
         await SeoJob.create({
@@ -345,12 +358,12 @@ async function quickSweepSite(site) {
     }
   }
 
-  // Scan media for missing alt text
+  // Scan media for missing alt text — capped separately so images never displace content jobs
   let imageQueued = 0;
   try {
     const media = await fetchAllMedia(creds);
     for (const item of media) {
-      if (contentQueued + imageQueued >= SWEEP_JOB_LIMIT) break;
+      if (imageQueued >= IMAGE_JOB_LIMIT) break;
       if (item.alt_text && item.alt_text.trim() !== '') continue;
 
       const existing = await SeoJob.findOne({

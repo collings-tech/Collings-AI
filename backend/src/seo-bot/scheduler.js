@@ -387,11 +387,13 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
     const optimized = await optimizePost(post, currentSeoMeta, seoPlugin, otherPosts || [], scoreBefore, rewriteThreshold, gscData, gaData, forceRewrite);
 
     // 7. Simulate the score with the new values before touching WordPress.
-    // If the optimized values would not improve the score, skip writing entirely.
+    // Skip only if we'd make things worse AND this isn't a forced rewrite.
+    // For forceRewrite (thin content / poor keyword coverage), always proceed — the rewrite
+    // itself is the fix and our simulator may underestimate the improvement on low-scoring posts.
     const { score: simulatedScore } = simulateScore(post, seoPlugin, optimized, creds.siteUrl);
-    logger.info('processJob: simulated score', { postId: job.postId, scoreBefore, simulatedScore });
+    logger.info('processJob: simulated score', { postId: job.postId, scoreBefore, simulatedScore, forceRewrite });
 
-    if (simulatedScore <= scoreBefore) {
+    if (simulatedScore <= scoreBefore && !forceRewrite) {
       logger.warn('processJob: optimized values would not improve score — skipping write', {
         postId: job.postId, scoreBefore, simulatedScore,
       });
@@ -420,19 +422,21 @@ async function processJob(job, { creds, seoPlugin, rewriteThreshold, site }) {
         if (actualScore > 0) {
           scoreAfter = actualScore;
           logger.info('processJob: actual Rank Math score fetched', { postId: job.postId, scoreBefore, scoreAfter });
-        } else {
-          // Rank Math's PHP hook did not update the score via REST API.
-          // Write the projected score directly to post meta so the WP dashboard number changes.
-          scoreAfter = simulatedScore;
-          try {
-            await wpRequest({
-              ...creds, method: 'POST', endpoint,
-              data: { meta: { rank_math_seo_score: Math.round(simulatedScore) } },
-            });
-            logger.info('processJob: wrote projected score directly to WP meta', { postId: job.postId, simulatedScore });
-          } catch (writeErr) {
-            logger.warn('processJob: direct score write failed (non-critical)', { postId: job.postId, err: writeErr.message });
-          }
+        }
+        // Always try to write the best available score as a top-level REST field.
+        // rank_math_seo_score is registered by Rank Math as a top-level REST field (not under meta),
+        // so writing via meta:{} is silently discarded. Top-level write works if Rank Math
+        // registered an update_callback, and is a no-op if not — either way it does no harm.
+        // The XML-RPC write in pluginWriter is the primary mechanism; this is a REST fallback.
+        const targetScore = Math.round(scoreAfter > scoreBefore ? scoreAfter : simulatedScore);
+        try {
+          await wpRequest({
+            ...creds, method: 'POST', endpoint,
+            data: { rank_math_seo_score: targetScore },
+          });
+          logger.info('processJob: wrote projected score via top-level REST field', { postId: job.postId, targetScore });
+        } catch (writeErr) {
+          logger.warn('processJob: top-level score write failed (non-critical)', { postId: job.postId, err: writeErr.message });
         }
       } catch (err) {
         logger.warn('processJob: re-fetch for Rank Math score failed, using simulated', { postId: job.postId, err: err.message });
