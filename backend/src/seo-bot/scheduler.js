@@ -150,7 +150,7 @@ async function processQueue(priorityFilter) {
   try {
     // Find all pending jobs at this priority that are due (scheduledAt <= now)
     const jobs = await SeoJob.find({ priority: priorityFilter, status: 'pending', scheduledAt: { $lte: new Date() } }) // paused jobs are excluded
-      .sort({ priority: 1, createdAt: 1 })
+      .sort({ priority: 1, seoScore: 1, createdAt: 1 })
       .limit(MAX_JOBS_PER_CYCLE);
 
     if (jobs.length === 0) return;

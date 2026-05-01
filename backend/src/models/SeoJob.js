@@ -43,6 +43,7 @@ const seoJobSchema = new mongoose.Schema(
     completedAt: { type: Date, default: null },
     error: { type: String, default: null },
     retryCount: { type: Number, default: 0 },
+    seoScore: { type: Number, default: null },
     result: {
       type: {
         action: { type: String }, // 'seo_optimization' | 'alt_text' | 'skipped'

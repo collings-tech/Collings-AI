@@ -95,19 +95,24 @@ async function sweepSite(site) {
   // All site IDs for this WordPress URL (multiple users may share it)
   const coSiteIds = (await Site.find({ siteUrl: site.siteUrl }, '_id')).map((s) => s._id);
 
-  let queued = 0;
-  for (const post of [...posts, ...pages]) {
-    const { score: simulatedScore } = scorePost(post, seoPlugin);
-    // Prefer the actual Rank Math stored score — it's what WordPress shows and is more accurate
-    // than our simulator. Fall back to simulator only when the field is absent or zero.
-    const rmStored = seoPlugin === 'rankmath'
-      ? Number(post.rank_math_seo_score || post?.meta?.rank_math_seo_score || 0)
-      : 0;
-    const score = rmStored > 0 ? rmStored : simulatedScore;
-    // Skip posts already at target (≥80) — matches the scheduler's own skip threshold
-    if (score >= 80) continue;
+  // Pre-score and sort lowest-score first so the worst posts get queued first,
+  // not just whatever WordPress returns first (newest date).
+  const scoredContent = [...posts, ...pages]
+    .map((post) => {
+      const { score: simulatedScore } = scorePost(post, seoPlugin);
+      const rmStored = seoPlugin === 'rankmath'
+        ? Number(post.rank_math_seo_score || post?.meta?.rank_math_seo_score || 0)
+        : 0;
+      const score = rmStored > 0 ? rmStored : simulatedScore;
+      return { post, score };
+    })
+    .filter(({ score }) => score < 80)
+    .sort((a, b) => a.score - b.score);
 
-    const priority = score < 60 ? 2 : 3;
+  let queued = 0;
+  for (const { post, score } of scoredContent) {
+    // Priority 1 for the worst posts (< 40) so they run every 5 min, not every 30 min.
+    const priority = score < 40 ? 1 : score < 60 ? 2 : 3;
     const triggeredBy = score < 40 ? 'low_score' : 'nightly_sweep';
     const postType = post.type === 'page' ? 'page' : 'post';
 
@@ -134,7 +139,7 @@ async function sweepSite(site) {
         });
         if (recentDone) continue;
 
-        await SeoJob.create({ siteId: site._id, postId: post.id, postType, priority, triggeredBy, scheduledAt: new Date() });
+        await SeoJob.create({ siteId: site._id, postId: post.id, postType, priority, triggeredBy, seoScore: score, scheduledAt: new Date() });
         queued++;
       }
     } catch (err) {
@@ -351,7 +356,7 @@ async function quickSweepSite(site) {
       if (!recentDone) {
         await SeoJob.create({
           siteId: site._id, postId: item.id, postType,
-          priority: 1, triggeredBy: 'quick_sweep', scheduledAt: new Date(),
+          priority: 1, triggeredBy: 'quick_sweep', seoScore: score, scheduledAt: new Date(),
         });
         contentQueued++;
       }
