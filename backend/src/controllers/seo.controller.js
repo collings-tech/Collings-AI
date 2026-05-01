@@ -274,8 +274,12 @@ exports.getDashboardOverview = async (req, res, next) => {
     const overview = await Promise.all(
       userSites.map(async (site) => {
         const [avgResult, postsOptimized, lastJob, pendingJobs, failedJobs] = await Promise.all([
+          // Average the most recent scoreAfter per post (not all-time avg which double-counts).
+          // This still only covers posts the bot has touched — posts never reached are excluded.
           SeoLog.aggregate([
-            { $match: { siteId: site._id, createdAt: { $gte: new Date(Date.now() - 30 * 86400000) } } },
+            { $match: { siteId: site._id } },
+            { $sort: { postId: 1, createdAt: -1 } },
+            { $group: { _id: '$postId', scoreAfter: { $first: '$scoreAfter' } } },
             { $group: { _id: null, avg: { $avg: '$scoreAfter' } } },
           ]),
           SeoLog.countDocuments({ siteId: site._id, createdAt: { $gte: startOfMonth } }),
