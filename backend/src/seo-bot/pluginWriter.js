@@ -129,7 +129,9 @@ async function writeSeoMeta(creds, postId, postType, seoPlugin, seoData, current
           timeout: 15000,
         });
       } catch (err) {
-        throw new Error(`Rank Math API update failed for post ${postId}: ${err.response?.status} ${err.response?.data?.message || err.message}`);
+        // rank-math-api plugin not installed or unavailable — fall through to the
+        // top-level REST write below, which Rank Math also supports natively.
+        logger.warn(`pluginWriter: rank-math-api plugin unavailable for post ${postId} (${err.response?.status || err.message}), falling back to REST top-level write`);
       }
     } else {
       // Pages: use standard WP meta endpoint as fallback

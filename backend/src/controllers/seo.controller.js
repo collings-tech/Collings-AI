@@ -296,6 +296,11 @@ exports.getDashboardOverview = async (req, res, next) => {
           { $count: 'count' },
         ]).then((r) => r[0]?.count || 0);
 
+        const recentFailedJob = await SeoJob.findOne({
+          siteId: site._id, status: 'failed',
+          completedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        }).sort({ completedAt: -1 }).select('error');
+
         return {
           siteId: site._id,
           siteLabel: site.label,
@@ -306,6 +311,7 @@ exports.getDashboardOverview = async (req, res, next) => {
           lastBotRun: lastJob?.createdAt || null,
           pendingJobs,
           failedJobs,
+          failedJobError: recentFailedJob?.error || null,
         };
       })
     );

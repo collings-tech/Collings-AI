@@ -102,7 +102,7 @@ function TrendArrow({ trend }) {
   return <span className="text-red-400 text-xs">↓ {diff.toFixed(1)}</span>;
 }
 
-function JobStatusBar({ pendingJobs, failedJobs, botEnabled }) {
+function JobStatusBar({ pendingJobs, failedJobs, failedJobError, botEnabled }) {
   const [scanIn, setScanIn] = useState(minsUntilNextScan());
 
   useEffect(() => {
@@ -142,7 +142,9 @@ function JobStatusBar({ pendingJobs, failedJobs, botEnabled }) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
         </svg>
         <span className="text-red-400 text-xs">{failedJobs} job{failedJobs !== 1 ? 's' : ''} failed</span>
-        <span className="ml-auto text-gray-500 text-xs">WordPress access issue</span>
+        <span className="ml-auto text-gray-500 text-xs truncate max-w-[180px]" title={failedJobError || 'WordPress access issue'}>
+          {failedJobError ? failedJobError.slice(0, 40) + (failedJobError.length > 40 ? '…' : '') : 'WordPress access issue'}
+        </span>
       </div>
     );
   }
@@ -368,7 +370,7 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
     finally { setTogglingBot(false); }
   };
 
-  const { avgScore, postsOptimized, attentionCount, lastBotRun, pendingJobs, failedJobs, trend, attentionPosts } = seoStats || {};
+  const { avgScore, postsOptimized, attentionCount, lastBotRun, pendingJobs, failedJobs, failedJobError, trend, attentionPosts } = seoStats || {};
   const hasSeoData = seoStats !== null && seoStats !== undefined;
   const colors = scoreColor(avgScore ?? null);
 
@@ -467,7 +469,7 @@ export default function SiteCard({ site, seoStats, onSelect, onDelete, siteId })
           )}
 
           <div className="px-5 pb-3">
-            <JobStatusBar pendingJobs={pendingJobs ?? 0} failedJobs={failedJobs ?? 0} botEnabled={botEnabled} />
+            <JobStatusBar pendingJobs={pendingJobs ?? 0} failedJobs={failedJobs ?? 0} failedJobError={failedJobError ?? null} botEnabled={botEnabled} />
           </div>
 
           <div className="px-5 pb-3 flex items-center gap-2">
