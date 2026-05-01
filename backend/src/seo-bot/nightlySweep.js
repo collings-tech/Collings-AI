@@ -127,15 +127,20 @@ async function sweepSite(site) {
         // Don't re-queue a post recently optimized with actual changes written.
         // Skipped jobs (no improvement written) don't count — the post still needs work.
         // Very low scores (< 40) use a shorter 4-hour window so they retry aggressively.
-        const cooldownMs = score < 40
-          ? 4 * 60 * 60 * 1000
-          : 24 * 60 * 60 * 1000;
+        // Posts the bot already optimized to target (≥80 scoreAfter) get a 7-day window —
+        // WordPress may not have stored the updated score (XML-RPC disabled on some hosts),
+        // so the WP score can still read low even though we already fixed it.
+        const shortCooldownMs = score < 40 ? 4 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
         const recentDone = await SeoJob.findOne({
           siteId: { $in: coSiteIds },
           postId: post.id,
           status: 'completed',
           'result.action': 'seo_optimization',
-          completedAt: { $gte: new Date(Date.now() - cooldownMs) },
+          $or: [
+            { completedAt: { $gte: new Date(Date.now() - shortCooldownMs) } },
+            { completedAt: { $gte: new Date(Date.now() - sevenDays) }, 'result.scoreAfter': { $gte: 80 } },
+          ],
         });
         if (recentDone) continue;
 
@@ -343,15 +348,19 @@ async function quickSweepSite(site) {
       // Only skip re-queuing if actual changes were written recently.
       // Skipped jobs (no improvement written) don't count — the post still needs work.
       // Very low scores (< 40) use a 4-hour window so they retry aggressively.
-      const cooldownMs = score < 40
-        ? 4 * 60 * 60 * 1000
-        : 24 * 60 * 60 * 1000;
+      // Posts already optimized to target (≥80 scoreAfter) get a 7-day window because
+      // WordPress may not store the updated score when XML-RPC is disabled on the host.
+      const shortCooldownMs = score < 40 ? 4 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+      const sevenDays = 7 * 24 * 60 * 60 * 1000;
       const recentDone = await SeoJob.findOne({
         siteId: { $in: coSiteIds },
         postId: item.id,
         status: 'completed',
         'result.action': 'seo_optimization',
-        completedAt: { $gte: new Date(Date.now() - cooldownMs) },
+        $or: [
+          { completedAt: { $gte: new Date(Date.now() - shortCooldownMs) } },
+          { completedAt: { $gte: new Date(Date.now() - sevenDays) }, 'result.scoreAfter': { $gte: 80 } },
+        ],
       });
       if (!recentDone) {
         await SeoJob.create({
